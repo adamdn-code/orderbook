@@ -3,6 +3,12 @@ CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Iinclude -Itests -pthread
 SRC = src/orderbook.cpp src/engine.cpp
 REF = tests/reference_book.cpp
 
+# Python extension module (needs Python headers: sudo apt install python3-dev)
+PYTHON ?= python3
+PY_INCLUDE = $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_paths()['include'])")
+PY_SUFFIX = $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+PY_EXT = build/obfast$(PY_SUFFIX)
+
 all: build/tests build/bench
 
 build:
@@ -13,6 +19,11 @@ build/tests: tests/tests.cpp $(SRC) $(REF) include/*.hpp tests/*.hpp | build
 
 build/bench: bench/bench.cpp $(SRC) $(REF) include/*.hpp tests/*.hpp | build
 	$(CXX) $(CXXFLAGS) bench/bench.cpp $(SRC) $(REF) -o $@
+
+python: $(PY_EXT)
+
+$(PY_EXT): bindings/obfast.cpp src/orderbook.cpp include/orderbook.hpp | build
+	$(CXX) -std=c++17 -O2 -Wall -Wextra -Wno-missing-field-initializers -Wno-cast-function-type -shared -fPIC -fvisibility=hidden -Iinclude -I$(PY_INCLUDE) bindings/obfast.cpp src/orderbook.cpp -o $@
 
 test: build/tests
 	./build/tests
@@ -33,4 +44,4 @@ asan: | build
 clean:
 	rm -rf build
 
-.PHONY: all test bench tsan asan clean
+.PHONY: all python test bench tsan asan clean

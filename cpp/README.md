@@ -12,6 +12,7 @@ tests/tests.cpp         30 tests incl. a 300k-step randomized comparison against
                         original book, ring ordering, backpressure, and an 8-thread stress test
 tests/reference_book.*  the original std::map book, kept to check and benchmark against
 bench/bench.cpp         throughput + latency benchmarks
+bindings/obfast.cpp     Python extension module exposing the book (see ../backtest)
 ```
 
 ## Build and run
@@ -20,6 +21,7 @@ make test     # build + run tests
 make bench    # build + run benchmark
 make tsan     # run tests under ThreadSanitizer (data-race checker)
 make asan     # run tests under AddressSanitizer + UBSan (memory/UB checker)
+make python   # build the obfast Python module (needs python3-dev)
 ```
 
 ## Usage
