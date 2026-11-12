@@ -1,6 +1,8 @@
-// Same cases as the Python tests, plus a multithreaded stress test.
+// Order book, ring buffer and engine tests, plus a randomized comparison
+// against the original std::map book and a multithreaded stress test.
 #include "engine.hpp"
 #include "orderbook.hpp"
+#include "reference_book.hpp"
 
 #include <atomic>
 #include <cstdio>
@@ -160,6 +162,129 @@ static void validation() {
     CHECK_THROWS(b.add(Order::limit(4, S, 5, 110)), OrderBookError);
     CHECK_THROWS(b.modify(99, 1, std::nullopt), OrderBookError);
     CHECK_THROWS(b.modify(4, 0, std::nullopt), OrderBookError);
+}
+
+// ---------- flat-array book internals ----------
+
+static void reserved_id_and_resting_duplicates() {
+    OrderBook b;
+    CHECK_THROWS(b.add(Order::limit(~OrderId(0), B, 1, 100)), OrderBookError);
+    b.add(Order::limit(1, B, 5, 100));
+    CHECK_THROWS(b.add(Order::limit(1, B, 5, 101)), OrderBookError);  // still resting
+    b.cancel(1);
+    b.add(Order::limit(1, B, 5, 101));  // id is free again once the order is gone
+    CHECK(b.best_bid() == 101);
+}
+
+static void price_range_limit_rejects_without_side_effects() {
+    OrderBook b(1024);
+    b.add(Order::limit(1, S, 5, 10'000));
+    CHECK_THROWS(b.add(Order::limit(2, B, 5, 10'000 + 5'000)), OrderBookError);   // would rest too far away
+    CHECK(b.best_ask() == 10'000 && b.size() == 1);                                // and nothing traded
+    CHECK_THROWS(b.add(Order::limit(3, S, 5, 10'000 - 5'000)), OrderBookError);
+    // Market and IOC orders never rest, so they aren't range-limited.
+    CHECK(b.add(Order::ioc(4, B, 2, 1'000'000)).size() == 1);
+    CHECK_THROWS(b.modify(1, std::nullopt, 50'000), OrderBookError);
+    CHECK(b.get(1) && b.get(1)->remaining == 3);  // failed modify left it alone
+}
+
+static void levels_grow_in_both_directions() {
+    OrderBook b;
+    b.add(Order::limit(1, B, 1, 50'000));
+    b.add(Order::limit(2, B, 1, 49'000));  // far below: array grows downward
+    b.add(Order::limit(3, S, 1, 52'000));  // far above: array grows upward
+    b.add(Order::limit(4, B, 1, 1'000));
+    CHECK(b.best_bid() == 50'000 && b.best_ask() == 52'000);
+    auto d = b.depth(B, 10);
+    CHECK(d.size() == 3 && d[1].first == 49'000 && d[2].first == 1'000);
+}
+
+static void best_price_found_across_bitmap_words() {
+    OrderBook b;
+    // Levels spread over many 64-bit bitmap words.
+    const Price bids[] = {10'000, 9'990, 9'800, 9'000, 8'999, 7'000};
+    OrderId id = 1;
+    for (Price p : bids) b.add(Order::limit(id++, B, 1, p));
+    for (Price expect : bids) {
+        CHECK(b.best_bid() == expect);
+        b.add(Order::market(id++, S, 1));  // eats the best level
+    }
+    CHECK(!b.best_bid() && b.size() == 0);
+    // Same going up on the ask side, emptied by cancels from the middle out.
+    b.add(Order::limit(100, S, 1, 500));
+    b.add(Order::limit(101, S, 1, 700));
+    b.add(Order::limit(102, S, 1, 900));
+    b.cancel(101);
+    CHECK(b.best_ask() == 500);
+    b.cancel(100);
+    CHECK(b.best_ask() == 900);
+}
+
+static void pool_slots_are_reused() {
+    OrderBook b;
+    for (int round = 0; round < 5; ++round) {
+        for (OrderId i = 1; i <= 1000; ++i) b.add(Order::limit(round * 10'000 + i, B, 1, 100 + Price(i % 10)));
+        CHECK(b.size() == 1000 && b.resting_qty() == 1000);
+        b.add(Order::market(round * 10'000 + 5000, S, 1000));
+        CHECK(b.size() == 0 && b.resting_qty() == 0 && !b.best_bid());
+    }
+}
+
+// Replays one random stream of adds, cancels and modifies through the new book
+// and the original std::map book; every trade and every book state must match.
+static void matches_reference_book() {
+    OrderBook fast;
+    ref::OrderBook slow;
+    std::mt19937_64 rng(2026);
+    std::uniform_int_distribution<int> op(0, 99), q(1, 50), side(0, 1), near(-30, 30);
+    std::uniform_int_distribution<Price> jump(5'000, 15'000);
+    std::vector<OrderId> live;  // ids we've sent (may since have filled)
+    OrderId next_id = 1;
+    Price mid = 10'000;
+    bool same = true;
+    int mismatches = 0;
+
+    for (int step = 0; step < 300'000 && mismatches < 5; ++step) {
+        const int k = op(rng);
+        std::vector<Trade> a, b;
+        bool threw_a = false, threw_b = false;
+        if (k < 1) mid = jump(rng);  // occasionally move the market far away
+        if (k < 60) {
+            const Side sd = side(rng) ? B : S;
+            const int t = op(rng);
+            Order o = t < 80 ? Order::limit(next_id, sd, q(rng), std::max<Price>(1, mid + near(rng)))
+                    : t < 90 ? Order::market(next_id, sd, q(rng))
+                             : Order::ioc(next_id, sd, q(rng), std::max<Price>(1, mid + near(rng)));
+            live.push_back(next_id++);
+            fast.add(o, a);
+            slow.add(o, b);
+        } else if (k < 85 && !live.empty()) {
+            const OrderId id = live[std::size_t(rng() % live.size())];
+            same &= fast.cancel(id) == slow.cancel(id);
+        } else if (!live.empty()) {
+            const OrderId id = live[std::size_t(rng() % live.size())];
+            const bool change_price = op(rng) < 50;
+            std::optional<Qty> nq = change_price ? std::nullopt : std::optional<Qty>(q(rng));
+            std::optional<Price> np = change_price ? std::optional<Price>(std::max<Price>(1, mid + near(rng))) : std::nullopt;
+            try { fast.modify(id, nq, np, a); } catch (const OrderBookError&) { threw_a = true; }
+            try { slow.modify(id, nq, np, b); } catch (const OrderBookError&) { threw_b = true; }
+        }
+        bool ok = threw_a == threw_b && a.size() == b.size();
+        for (std::size_t i = 0; ok && i < a.size(); ++i)
+            ok = a[i].buy_id == b[i].buy_id && a[i].sell_id == b[i].sell_id && a[i].price == b[i].price &&
+                 a[i].qty == b[i].qty && a[i].aggressor == b[i].aggressor;
+        ok = ok && fast.best_bid() == slow.best_bid() && fast.best_ask() == slow.best_ask() &&
+             fast.size() == slow.size();
+        if (step % 1000 == 0)
+            ok = ok && fast.resting_qty() == slow.resting_qty() && fast.depth(B, 10) == slow.depth(B, 10) &&
+                 fast.depth(S, 10) == slow.depth(S, 10);
+        if (!ok) {
+            ++mismatches;
+            std::printf("  mismatch at step %d\n", step);
+        }
+        same &= ok;
+    }
+    CHECK(same);
 }
 
 // ---------- SpscRing ----------
@@ -402,6 +527,12 @@ int main() {
         {"modify_price_can_trade", modify_price_can_trade},
         {"depth_aggregates_levels", depth_aggregates_levels},
         {"validation", validation},
+        {"reserved_id_and_resting_duplicates", reserved_id_and_resting_duplicates},
+        {"price_range_limit_rejects_without_side_effects", price_range_limit_rejects_without_side_effects},
+        {"levels_grow_in_both_directions", levels_grow_in_both_directions},
+        {"best_price_found_across_bitmap_words", best_price_found_across_bitmap_words},
+        {"pool_slots_are_reused", pool_slots_are_reused},
+        {"matches_reference_book", matches_reference_book},
         {"ring_full_empty_and_wraparound", ring_full_empty_and_wraparound},
         {"ring_two_threads_keep_order", ring_two_threads_keep_order},
         {"engine_submit_reports_trades", engine_submit_reports_trades},

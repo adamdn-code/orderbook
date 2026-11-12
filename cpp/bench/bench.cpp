@@ -1,11 +1,12 @@
 // Benchmarks:
-//   1. Single book, one thread: throughput and per-order latency percentiles.
+//   1. Single book, one thread: throughput and per-order latency, old vs new book.
 //   2. Engine: N client threads (one session each), 3 symbols. Throughput is
 //      measured until every order has been matched (drain()).
 //   3. Engine round-trip latency: one client sends an order, waits for its
 //      result callback, repeats. Time from submit() to callback.
 #include "engine.hpp"
 #include "orderbook.hpp"
+#include "reference_book.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -30,13 +31,14 @@ static auto pct(V& sorted, double p) {
     return sorted[std::size_t(p * double(sorted.size() - 1))];
 }
 
-static void bench_single_book(std::size_t n) {
+template <class Book>
+static void bench_single_book(const char* label, std::size_t n) {
     std::mt19937_64 rng(42);
     std::vector<Order> orders;
     orders.reserve(n);
     for (std::size_t i = 0; i < n; ++i) orders.push_back(random_order(rng, i + 1));
 
-    OrderBook book;
+    Book book;
     book.keep_history(false);
     std::vector<Trade> out;
     out.reserve(1024);
@@ -54,7 +56,7 @@ static void bench_single_book(std::size_t n) {
     const double secs = std::chrono::duration<double>(Clock::now() - start).count();
 
     std::sort(lat_ns.begin(), lat_ns.end());
-    std::printf("Single book, 1 thread\n");
+    std::printf("Single book, 1 thread: %s\n", label);
     std::printf("  %zu orders, %zu trades in %.3fs  ->  %.2f M orders/s\n", n, trades, secs, n / secs / 1e6);
     std::printf("  latency per order: p50 %u ns, p99 %u ns, p99.9 %u ns\n\n", pct(lat_ns, 0.50), pct(lat_ns, 0.99),
                 pct(lat_ns, 0.999));
@@ -132,7 +134,8 @@ static void bench_round_trip(int n) {
 int main(int argc, char** argv) {
     const std::size_t n = argc > 1 ? std::stoul(argv[1]) : 2'000'000;
     std::printf("hardware threads: %u\n\n", std::thread::hardware_concurrency());
-    bench_single_book(n);
+    bench_single_book<ref::OrderBook>("old (std::map + std::list)", n);
+    bench_single_book<OrderBook>("new (flat levels + bitmap + pool)", n);
     bench_engine(8, 5'000);    // same size as the Python demo (40k orders)
     bench_engine(8, 250'000);  // 2M orders
     bench_engine(2, 1'000'000);

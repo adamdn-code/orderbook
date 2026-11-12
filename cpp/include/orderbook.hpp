@@ -9,17 +9,30 @@
 //
 // Matching rule: best price first; at the same price, earliest order first.
 // Trades execute at the resting order's price.
+//
+// Data layout (built so the hot path does no memory allocation):
+//   - Price levels live in one flat array indexed by (price - base). Finding a
+//     level is an array index, not a tree walk.
+//   - A bitmap marks which levels have orders, so after a level empties the
+//     next best price is found 64 levels at a time with a single CPU
+//     instruction (count leading/trailing zeros).
+//   - Orders live in a pool (one vector) and are linked into their level's
+//     FIFO queue by index. Freed slots are reused, so after warm-up adding
+//     an order allocates nothing.
+//   - Order ids map to pool slots through an open-addressing hash table
+//     (one flat array, linear probing), not std::unordered_map's per-node
+//     allocations.
+//
+// Limits: the array spans every price the book has rested at, so prices must
+// stay within `max_levels` ticks of each other (default 4M ticks, ample for
+// a single instrument). Order ids must be unique among resting orders, and
+// the id 2^64-1 is reserved.
 #pragma once
 
 #include <cstdint>
-#include <functional>
-#include <list>
-#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -61,6 +74,10 @@ struct OrderBookError : std::invalid_argument {
 
 class OrderBook {
 public:
+    static constexpr std::size_t kDefaultMaxLevels = std::size_t(1) << 22;
+
+    explicit OrderBook(std::size_t max_levels = kDefaultMaxLevels);
+
     // Submit an order. Trades it causes are appended to `out`.
     void add(Order order, std::vector<Trade>& out);
     std::vector<Trade> add(Order order);
@@ -78,9 +95,10 @@ public:
     std::optional<Price> spread() const;
     std::vector<std::pair<Price, Qty>> depth(Side side, std::size_t levels = 5) const;
 
+    // Pointer into the pool; valid until the next change to the book.
     const Order* get(OrderId id) const;
     std::size_t size() const { return index_.size(); }
-    Qty resting_qty() const;
+    Qty resting_qty() const { return resting_; }
 
     // Every trade so far. Turn off for long benchmarks to save memory.
     const std::vector<Trade>& trades() const { return history_; }
@@ -89,27 +107,75 @@ public:
     std::string to_string(std::size_t levels = 5) const;
 
 private:
-    using Level = std::list<Order>;  // FIFO; list iterators stay valid on erase
-    using Bids = std::map<Price, Level, std::greater<Price>>;  // best (highest) first
-    using Asks = std::map<Price, Level, std::less<Price>>;     // best (lowest) first
+    static constexpr std::uint32_t kNil = ~std::uint32_t(0);
+    static constexpr std::size_t kSlack = 64;  // extra levels added around a new price
 
-    struct Location {
-        Side side;
-        Price price;
-        Level::iterator it;
+    struct Node {
+        Order order;
+        std::uint32_t prev = kNil;
+        std::uint32_t next = kNil;  // also links the free list
+    };
+
+    struct Level {
+        std::uint32_t head = kNil;  // oldest order (trades first)
+        std::uint32_t tail = kNil;
+        Qty qty = 0;
+    };
+
+    // OrderId -> pool slot. Open addressing with linear probing; erase uses
+    // backward shifting, so there are no tombstones.
+    class IdMap {
+    public:
+        static constexpr OrderId kEmpty = ~OrderId(0);
+        IdMap();
+        const std::uint32_t* find(OrderId key) const;
+        void insert(OrderId key, std::uint32_t value);
+        bool erase(OrderId key);
+        std::size_t size() const { return size_; }
+
+    private:
+        std::size_t home(OrderId key) const;
+        void rehash(std::size_t capacity);
+        std::vector<OrderId> keys_;
+        std::vector<std::uint32_t> values_;
+        std::size_t mask_ = 0;
+        std::size_t size_ = 0;
     };
 
     void validate(const Order& o) const;
+    void check_range(Price p) const;
     void match(Order& o, std::vector<Trade>& out);
-    template <class Book>
-    void match_against(Book& book, Order& o, std::vector<Trade>& out);
+    void fill_level(Level& level, Order& o, Price price, std::vector<Trade>& out);
     void rest(const Order& o);
-    static bool crosses(const Order& o, Price best);
 
-    Bids bids_;
-    Asks asks_;
-    std::unordered_map<OrderId, Location> index_;
-    std::unordered_set<OrderId> seen_;
+    Level& level_at(Price p);  // grows the array if needed
+    void resize_levels(std::size_t n);
+    void rebuild_bits();
+    std::size_t index_of(Price p) const { return std::size_t(p - base_); }
+    void set_bit(std::size_t i) { bits_[i >> 6] |= std::uint64_t(1) << (i & 63); }
+    void clear_bit(std::size_t i) { bits_[i >> 6] &= ~(std::uint64_t(1) << (i & 63)); }
+    std::ptrdiff_t find_prev(std::size_t i) const;  // highest set index < i, or -1
+    std::ptrdiff_t find_next(std::size_t i) const;  // lowest set index >= i, or -1
+    void level_emptied(Price p, Side side);
+
+    std::uint32_t alloc_node(const Order& o);
+    void free_node(std::uint32_t n);
+    void unlink(Level& level, std::uint32_t n);
+
+    std::size_t max_levels_;
+    Price base_ = 0;
+    std::vector<Level> levels_;
+    std::vector<std::uint64_t> bits_;
+    bool has_bid_ = false;
+    bool has_ask_ = false;
+    Price best_bid_ = 0;
+    Price best_ask_ = 0;
+
+    std::vector<Node> pool_;
+    std::uint32_t free_ = kNil;
+    IdMap index_;
+    Qty resting_ = 0;
+
     std::vector<Trade> history_;
     bool keep_history_ = true;
 };

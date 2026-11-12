@@ -8,7 +8,9 @@ include/orderbook.hpp   single-threaded book (limit / market / IOC, cancel, modi
 include/spsc_ring.hpp   lock-free single-producer/single-consumer ring buffer
 include/engine.hpp      matching engine: one thread per symbol, one ring per client per symbol
 src/                    implementations
-tests/tests.cpp         24 tests incl. ring ordering, backpressure, and an 8-thread stress test
+tests/tests.cpp         30 tests incl. a 300k-step randomized comparison against the
+                        original book, ring ordering, backpressure, and an 8-thread stress test
+tests/reference_book.*  the original std::map book, kept to check and benchmark against
 bench/bench.cpp         throughput + latency benchmarks
 ```
 
@@ -17,6 +19,7 @@ bench/bench.cpp         throughput + latency benchmarks
 make test     # build + run tests
 make bench    # build + run benchmark
 make tsan     # run tests under ThreadSanitizer (data-race checker)
+make asan     # run tests under AddressSanitizer + UBSan (memory/UB checker)
 ```
 
 ## Usage
@@ -33,7 +36,14 @@ engine.drain();                            // wait until everything sent is matc
 Callbacks for a symbol always run on that symbol's matching thread, one at a time.
 
 ## How it works
-**Book.** Each side is a `std::map<Price, std::list<Order>>`. Bids are sorted high to low and asks low to high, so the best price is always `begin()`. Each level is a FIFO list for time priority. An `unordered_map` from order id to its list iterator makes cancel O(1) once the level is found.
+**Book.** Built so that adding, matching and cancelling allocate no memory once it's warmed up:
+- *Flat array of price levels*, indexed by `price - base`. Finding a level is an array index instead of a `std::map` tree walk. The array grows in either direction as new prices appear.
+- *Bitmap of non-empty levels.* When the best level empties, the next best price is found 64 levels at a time with one CPU instruction (count leading/trailing zeros). Because the book is never crossed, everything below the best bid is a bid and everything above the best ask is an ask, so one bitmap serves both sides.
+- *Order pool.* Orders live in one vector and are linked into their level's FIFO queue by index (an intrusive doubly linked list), so cancel is O(1). Freed slots go on a free list and get reused.
+- *Open-addressing hash map* from order id to pool slot: one flat array with linear probing and backward-shift deletion, instead of `std::unordered_map`, which allocates a node per entry.
+- *Correctness check.* The old `std::map` book is kept in `tests/`. A randomized test replays 300k adds, cancels and modifies, including large price jumps, through both books and requires identical trades, best prices and depth after every step.
+
+Limits: prices in one book must stay within 4M ticks of each other (configurable), and order ids must be unique among resting orders.
 
 **Engine.**
 - *One ring per (client, symbol).* Every queue has exactly one writer and one reader, so it needs no lock, just two atomic indices. Each index sits on its own 64-byte cache line, so producer and consumer never invalidate each other's memory (no false sharing). Each side caches the other's index and only rereads it when the ring looks full or empty.
@@ -43,21 +53,30 @@ Callbacks for a symbol always run on that symbol's matching thread, one at a tim
 - *Safe shutdown.* `submit()` and `stop()` do a small handshake with two sequentially consistent atomics, so an order can't slip in after a matcher has decided it's done.
 
 ## Evolution and results
-Three engine versions, same workload (8 client threads, 3 symbols, 2M random orders):
+### Book (single thread, 2M random orders, 2-core VM)
+| | Throughput | p50 | p99 | p99.9 |
+|---|---|---|---|---|
+| Old: `std::map` + `std::list` + `unordered_map` | 2.90 M/s | 153 ns | 1,127 ns | 3,202 ns |
+| New: flat levels + bitmap + pool + open addressing | **6.13 M/s** | **110 ns** | **352 ns** | **593 ns** |
+
+The tail latency improves most: the old book's slow orders were the ones that hit the memory allocator or a cache miss in the tree.
+
+### Engine
+Engine versions, same workload (8 client threads, 3 symbols, 2M random orders):
 
 | Version | 2-core cloud VM | 16-thread laptop |
 |---|---|---|
 | v1: mutex queue + condition variable + future per order | 0.75 M/s | 0.20 M/s |
 | v2: wake matcher only when asleep | 0.79 M/s | 0.27 M/s |
-| v3: lock-free SPSC rings, no per-order allocation | 3.08 M/s | **3.73 M/s** (18× v1) |
+| v3: lock-free SPSC rings, no per-order allocation | 3.08 M/s | 3.73 M/s (18× v1) |
+| v4: v3 + new book | **12.36 M/s** | (run `make bench`) |
 
 v1 got *slower* on more cores: every order woke a sleeping thread through the OS, and 8 clients fought over 3 locks whose cache lines bounced between cores. v3 removes all shared writes between clients.
 
 On the laptop, v3 also does 9.28 M orders/s on a 40k burst (v1: 0.05 M/s) and 5.10 M/s with 2 clients. Engine round trip (submit → result callback) is p50 301 ns, p99 1.0 µs.
 
-Single book: ~2.1–2.8 M orders/s, p50 ~140–170 ns per order. Each matching thread is now limited by the book itself, which is why the next step is the book's data structures, not the engine.
+After v3, each matching thread was limited by the book itself, which is why v4 rebuilt the book's data structures.
 
 ## Next steps
-- Pool-allocate orders and use a flat array of price levels instead of `std::map`/`std::list`
 - Pin matching threads to cores
 - Stop orders, FOK (fill-or-kill)
