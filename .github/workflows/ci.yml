@@ -42,3 +42,11 @@ jobs:
           python-version: "3.12"
       - name: Pure-Python order book and engine
         run: python -m unittest -v test_orderbook test_engine
+      - name: Install backtest dependencies
+        run: pip install numpy pandas matplotlib
+      - name: Build obfast (C++ book as a Python module)
+        run: make -C cpp python
+      - name: Binding and backtest tests
+        run: python -m unittest discover -s backtest -v
+      - name: Backtest smoke run
+        run: python backtest/run_backtest.py --quick

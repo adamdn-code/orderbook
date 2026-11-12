@@ -37,6 +37,11 @@ python -m unittest -v        # all tests
 ## C++ version
 `cpp/` has a C++17 port of the book plus a lock-free engine (one SPSC ring per client per symbol, no per-order allocation), with tests and benchmarks. See `cpp/README.md`.
 
+## Python bindings and market-making backtest
+`backtest/` drives the C++ book from Python through `obfast`, a CPython extension module (12.9× faster than the pure-Python book on the same orders). It uses it to backtest a market-making strategy against simulated informed and uninformed order flow, sweeping quote width and inventory skew. Inventory skew cut drawdowns 7–11× and raised risk-adjusted return about 4×. See `backtest/README.md`.
+
+![Parameter sweep](backtest/results/sweep.png)
+
 ## Next steps
 - One process per symbol (multiprocessing) for real CPU parallelism
 - Stop orders, FOK (fill-or-kill)
