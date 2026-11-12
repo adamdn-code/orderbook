@@ -53,13 +53,15 @@ Limits: prices in one book must stay within 4M ticks of each other (configurable
 - *Safe shutdown.* `submit()` and `stop()` do a small handshake with two sequentially consistent atomics, so an order can't slip in after a matcher has decided it's done.
 
 ## Evolution and results
-### Book (single thread, 2M random orders, 2-core VM)
-| | Throughput | p50 | p99 | p99.9 |
-|---|---|---|---|---|
-| Old: `std::map` + `std::list` + `unordered_map` | 2.90 M/s | 153 ns | 1,127 ns | 3,202 ns |
-| New: flat levels + bitmap + pool + open addressing | **6.13 M/s** | **110 ns** | **352 ns** | **593 ns** |
+### Book (single thread, 2M random orders)
+| | Machine | Throughput | p50 | p99 | p99.9 |
+|---|---|---|---|---|---|
+| Old: `std::map` + `std::list` + `unordered_map` | 2-core VM | 2.90 M/s | 153 ns | 1,127 ns | 3,202 ns |
+| New: flat levels + bitmap + pool + open addressing | 2-core VM | **6.13 M/s** | **110 ns** | **352 ns** | **593 ns** |
+| Old | 16-thread laptop | 2.63 M/s | 150 ns | 2,205 ns | 7,063 ns |
+| New | 16-thread laptop | **3.54 M/s** | 160 ns | **692 ns** | **1,112 ns** |
 
-The tail latency improves most: the old book's slow orders were the ones that hit the memory allocator or a cache miss in the tree.
+The tail latency improves most (3–6× at p99/p99.9): the old book's slow orders were the ones that hit the memory allocator or a cache miss in the tree. Median latency is about the same because a typical order touches only the best level either way, and at ~150 ns the timer's own overhead is part of the number.
 
 ### Engine
 Engine versions, same workload (8 client threads, 3 symbols, 2M random orders):
@@ -69,11 +71,11 @@ Engine versions, same workload (8 client threads, 3 symbols, 2M random orders):
 | v1: mutex queue + condition variable + future per order | 0.75 M/s | 0.20 M/s |
 | v2: wake matcher only when asleep | 0.79 M/s | 0.27 M/s |
 | v3: lock-free SPSC rings, no per-order allocation | 3.08 M/s | 3.73 M/s (18× v1) |
-| v4: v3 + new book | **12.36 M/s** | (run `make bench`) |
+| v4: v3 + new book | **12.36 M/s** | **12.75 M/s** (64× v1) |
 
 v1 got *slower* on more cores: every order woke a sleeping thread through the OS, and 8 clients fought over 3 locks whose cache lines bounced between cores. v3 removes all shared writes between clients.
 
-On the laptop, v3 also does 9.28 M orders/s on a 40k burst (v1: 0.05 M/s) and 5.10 M/s with 2 clients. Engine round trip (submit → result callback) is p50 301 ns, p99 1.0 µs.
+On the laptop, v4 does 16.8 M orders/s on a 40k burst (v1: 0.05 M/s) and 16.5 M/s with 2 clients. Engine round trip (submit → result callback) is p50 291 ns, p99 601 ns (v3: 301 ns / 1,032 ns).
 
 After v3, each matching thread was limited by the book itself, which is why v4 rebuilt the book's data structures.
 
