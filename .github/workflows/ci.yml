@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  cpp:
+    name: C++ tests (${{ matrix.check }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [test, asan, tsan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Allow ThreadSanitizer's memory layout
+        if: matrix.check == 'tsan'
+        # Newer runner kernels randomize more address bits than TSan supports.
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: make ${{ matrix.check }}
+        working-directory: cpp
+        run: make ${{ matrix.check }}
+
+  cpp-cmake:
+    name: C++ build with CMake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S cpp -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build -j
+      - run: ./build/tests
+
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pure-Python order book and engine
+        run: python -m unittest -v test_orderbook test_engine

@@ -1,5 +1,7 @@
 # OrderBook
 
+[![CI](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml/badge.svg)](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml)
+
 A single-threaded limit order book in Python with price-time priority, like the matching engine an exchange runs. No dependencies.
 
 ## Features
