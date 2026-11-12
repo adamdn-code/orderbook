@@ -95,6 +95,9 @@ public:
     std::optional<Price> spread() const;
     std::vector<std::pair<Price, Qty>> depth(Side side, std::size_t levels = 5) const;
 
+    // Id of the order first in line at the best price on this side.
+    std::optional<OrderId> front(Side side) const;
+
     // Pointer into the pool; valid until the next change to the book.
     const Order* get(OrderId id) const;
     std::size_t size() const { return index_.size(); }

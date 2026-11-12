@@ -48,6 +48,7 @@ public:
     std::optional<Price> spread() const;
     std::vector<std::pair<Price, Qty>> depth(Side side, std::size_t levels = 5) const;
 
+    std::optional<OrderId> front(Side side) const;
     const Order* get(OrderId id) const;
     std::size_t size() const { return index_.size(); }
     Qty resting_qty() const;

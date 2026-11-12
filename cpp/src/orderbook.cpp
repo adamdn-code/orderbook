@@ -173,6 +173,15 @@ std::vector<std::pair<Price, Qty>> OrderBook::depth(Side side, std::size_t level
     return out;
 }
 
+std::optional<OrderId> OrderBook::front(Side side) const {
+    if (side == Side::Buy) {
+        if (!has_bid_) return std::nullopt;
+        return pool_[levels_[index_of(best_bid_)].head].order.id;
+    }
+    if (!has_ask_) return std::nullopt;
+    return pool_[levels_[index_of(best_ask_)].head].order.id;
+}
+
 const Order* OrderBook::get(OrderId id) const {
     const std::uint32_t* slot = index_.find(id);
     return slot ? &pool_[*slot].order : nullptr;

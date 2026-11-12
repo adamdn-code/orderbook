@@ -13,6 +13,8 @@ tests/tests.cpp         30 tests incl. a 300k-step randomized comparison against
 tests/reference_book.*  the original std::map book, kept to check and benchmark against
 bench/bench.cpp         throughput + latency benchmarks
 bindings/obfast.cpp     Python extension module exposing the book (see ../backtest)
+itch/                   Nasdaq ITCH 5.0 parser + replay of a real trading day (see itch/README.md)
+tests/itch_tests.cpp    ITCH tests on synthetic feeds written to the spec
 ```
 
 ## Build and run
@@ -22,6 +24,7 @@ make bench    # build + run benchmark
 make tsan     # run tests under ThreadSanitizer (data-race checker)
 make asan     # run tests under AddressSanitizer + UBSan (memory/UB checker)
 make python   # build the obfast Python module (needs python3-dev)
+make itch     # build itch_replay (needs zlib1g-dev)
 ```
 
 ## Usage

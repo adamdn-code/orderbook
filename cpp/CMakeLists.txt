@@ -24,5 +24,18 @@ target_link_libraries(tests orderbook reference_book)
 add_executable(bench bench/bench.cpp)
 target_link_libraries(bench orderbook reference_book)
 
+find_package(ZLIB)
+if(ZLIB_FOUND)
+  add_library(itch_replay_lib itch/replay.cpp)
+  target_include_directories(itch_replay_lib PUBLIC itch)
+  target_link_libraries(itch_replay_lib PUBLIC orderbook reference_book ZLIB::ZLIB)
+
+  add_executable(itch_replay itch/main.cpp)
+  target_link_libraries(itch_replay itch_replay_lib)
+
+  add_executable(itch_tests tests/itch_tests.cpp)
+  target_link_libraries(itch_tests itch_replay_lib)
+endif()
+
 enable_testing()
 add_test(NAME tests COMMAND tests)

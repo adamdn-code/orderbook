@@ -94,6 +94,15 @@ std::vector<std::pair<Price, Qty>> OrderBook::depth(Side side, std::size_t level
     return out;
 }
 
+std::optional<OrderId> OrderBook::front(Side side) const {
+    if (side == Side::Buy) {
+        if (bids_.empty()) return std::nullopt;
+        return bids_.begin()->second.front().id;
+    }
+    if (asks_.empty()) return std::nullopt;
+    return asks_.begin()->second.front().id;
+}
+
 const Order* OrderBook::get(OrderId id) const {
     auto found = index_.find(id);
     return found == index_.end() ? nullptr : &*found->second.it;
