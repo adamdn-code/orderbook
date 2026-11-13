@@ -314,6 +314,35 @@ static void depth_csv_has_levels() {
     CHECK(row2 == "2000000000,10.0000,150,10.0200,300,9.9900,200,0.0000,0,0.0000,0,0.0000,0");
 }
 
+static void events_csv_lists_every_order_event() {
+    Writer w;
+    w.directory(1, "EV");
+    w.add(1, "EV", 1, 10, true, 100, usd(10.00));
+    w.executed(1, 2, 10, 40);
+    w.cancel(1, 3, 10, 10);
+    w.replace(1, 4, 10, 11, 70, usd(10.01));
+    w.trade(1, "EV", 5, 300, usd(10.005));
+    w.del(1, 6, 11);
+    w.save(tmp("events.itch"), false);
+    ReplayOptions opts;
+    opts.track = "EV";
+    opts.out_dir = "build";
+    opts.events = true;
+    { Replayer r = replay_file(tmp("events.itch"), opts); }
+    std::ifstream f("build/EV_events.csv");
+    std::vector<std::string> lines;
+    for (std::string l; std::getline(f, l);) lines.push_back(l);
+    CHECK(lines.size() == 7);
+    if (lines.size() == 7) {
+        CHECK(lines[1] == "1,A,10,B,100,100000,0");
+        CHECK(lines[2] == "2,E,10,B,40,100000,0");
+        CHECK(lines[3] == "3,X,10,B,10,100000,0");
+        CHECK(lines[4] == "4,U,10,B,70,100100,11");
+        CHECK(lines[5] == "5,P,0,B,300,100050,0");
+        CHECK(lines[6] == "6,D,11,B,70,100100,0");
+    }
+}
+
 static void unknown_orders_and_over_executions_are_counted() {
     Writer w;
     w.directory(1, "X");
@@ -497,6 +526,7 @@ int main() {
         {"orders_the_book_cant_hold_still_apply", orders_the_book_cant_hold_still_apply},
         {"sub_penny_order_switches_book_and_keeps_queues", sub_penny_order_switches_book_and_keeps_queues},
         {"depth_csv_has_levels", depth_csv_has_levels},
+        {"events_csv_lists_every_order_event", events_csv_lists_every_order_event},
         {"unknown_orders_and_over_executions_are_counted", unknown_orders_and_over_executions_are_counted},
         {"gzip_and_plain_files_match_and_truncation_is_reported", gzip_and_plain_files_match_and_truncation_is_reported},
         {"malformed_length_is_counted", malformed_length_is_counted},

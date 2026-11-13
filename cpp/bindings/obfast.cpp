@@ -201,6 +201,28 @@ PyObject* Book_depth(BookObject* self, PyObject* args) {
     return list;
 }
 
+PyObject* Book_level(BookObject* self, PyObject* args) {
+    int side_int;
+    long long price;
+    if (!PyArg_ParseTuple(args, "iL", &side_int, &price)) return nullptr;
+    if (side_int != 0 && side_int != 1) {
+        PyErr_SetString(PyExc_ValueError, "side must be obfast.BUY (0) or obfast.SELL (1)");
+        return nullptr;
+    }
+    const auto q = self->book->level(side_int == 0 ? ob::Side::Buy : ob::Side::Sell, price);
+    PyObject* list = PyList_New(Py_ssize_t(q.size()));
+    if (!list) return nullptr;
+    for (std::size_t i = 0; i < q.size(); ++i) {
+        PyObject* tup = Py_BuildValue("(KL)", (unsigned long long)q[i].first, (long long)q[i].second);
+        if (!tup) {
+            Py_DECREF(list);
+            return nullptr;
+        }
+        PyList_SET_ITEM(list, Py_ssize_t(i), tup);
+    }
+    return list;
+}
+
 PyObject* Book_remaining(BookObject* self, PyObject* const* args, Py_ssize_t nargs) {
     if (!check_nargs(nargs, 1)) return nullptr;
     std::uint64_t id;
@@ -238,6 +260,8 @@ PyMethodDef Book_methods[] = {
     {"mid", FASTCALL(Book_mid), METH_NOARGS, "(best_bid + best_ask) / 2 as a float, or None."},
     {"depth", FASTCALL(Book_depth), METH_VARARGS, "depth(side, levels=5) -> [(price, total_qty), ...] best first."},
     {"remaining", FASTCALL(Book_remaining), METH_FASTCALL, "remaining(id) -> resting quantity, or None."},
+    {"level", FASTCALL(Book_level), METH_VARARGS,
+     "level(side, price) -> [(id, remaining), ...] at that price, first in line first."},
     {"resting_qty", FASTCALL(Book_resting_qty), METH_NOARGS, "Total quantity resting in the book."},
     {nullptr, nullptr, 0, nullptr},
 };

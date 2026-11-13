@@ -49,6 +49,7 @@ Replayer::~Replayer() {
         if (!s) continue;
         if (s->book_csv) std::fclose(s->book_csv);
         if (s->trades_csv) std::fclose(s->trades_csv);
+        if (s->events_csv) std::fclose(s->events_csv);
     }
 }
 
@@ -123,6 +124,7 @@ void Replayer::on_add(std::uint16_t locate, std::uint64_t ts, std::uint64_t ref,
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.adds;
+    if (s->events_csv) event(*s, ts, 'A', ref, buy ? 'B' : 'S', shares, price);
     place(*s, ref, buy, shares, price);
     after(*s, ts);
 }
@@ -131,6 +133,10 @@ void Replayer::on_executed(std::uint16_t locate, std::uint64_t ts, std::uint64_t
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.executions;
+    if (s->events_csv) {
+        const OrderInfo o = info(*s, ref);
+        event(*s, ts, 'E', ref, o.found ? (o.buy ? 'B' : 'S') : '?', shares, o.price);
+    }
     // Before applying it, check that this is the order price-time priority says trades next.
     const std::int64_t price = with_book(*s, std::int64_t(-1), [&](auto& book, std::int64_t unit) -> std::int64_t {
         const ob::Order* o = book.get(ref);
@@ -159,6 +165,10 @@ void Replayer::on_executed_with_price(std::uint16_t locate, std::uint64_t ts, st
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.executions_priced;
+    if (s->events_csv) {
+        const OrderInfo o = info(*s, ref);
+        event(*s, ts, 'C', ref, o.found ? (o.buy ? 'B' : 'S') : '?', shares, price);
+    }
     if (!reduce(*s, ref, shares)) {
         ++s->counts.missing_refs;
         return;
@@ -171,6 +181,10 @@ void Replayer::on_cancel(std::uint16_t locate, std::uint64_t ts, std::uint64_t r
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.cancels;
+    if (s->events_csv) {
+        const OrderInfo o = info(*s, ref);
+        event(*s, ts, 'X', ref, o.found ? (o.buy ? 'B' : 'S') : '?', shares, o.price);
+    }
     if (!reduce(*s, ref, shares)) ++s->counts.missing_refs;
     after(*s, ts);
 }
@@ -179,6 +193,10 @@ void Replayer::on_delete(std::uint16_t locate, std::uint64_t ts, std::uint64_t r
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.deletes;
+    if (s->events_csv) {
+        const OrderInfo o = info(*s, ref);
+        event(*s, ts, 'D', ref, o.found ? (o.buy ? 'B' : 'S') : '?', o.remaining, o.price);
+    }
     if (!remove(*s, ref)) ++s->counts.missing_refs;
     after(*s, ts);
 }
@@ -188,6 +206,10 @@ void Replayer::on_replace(std::uint16_t locate, std::uint64_t ts, std::uint64_t 
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.replaces;
+    if (s->events_csv) {
+        const OrderInfo o = info(*s, old_ref);
+        event(*s, ts, 'U', old_ref, o.found ? (o.buy ? 'B' : 'S') : '?', shares, price, new_ref);
+    }
     // The replacement keeps the original's side but goes to the back of the queue.
     const int side = with_book(*s, -1, [&](auto& book, std::int64_t) {
         const ob::Order* o = book.get(old_ref);
@@ -209,10 +231,11 @@ void Replayer::on_replace(std::uint16_t locate, std::uint64_t ts, std::uint64_t 
     after(*s, ts);
 }
 
-void Replayer::on_trade(std::uint16_t locate, std::uint64_t ts, bool, std::uint32_t shares, std::uint32_t price) {
+void Replayer::on_trade(std::uint16_t locate, std::uint64_t ts, bool buy, std::uint32_t shares, std::uint32_t price) {
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.hidden_trades;
+    if (s->events_csv) event(*s, ts, 'P', 0, buy ? 'B' : 'S', shares, price);
     record_trade(*s, ts, 'P', shares, price);
 }
 
@@ -220,6 +243,7 @@ void Replayer::on_cross(std::uint16_t locate, std::uint64_t ts, std::uint64_t sh
     Stock* s = stock(locate);
     if (!s) return;
     ++s->counts.crosses;
+    if (s->events_csv) event(*s, ts, 'Q', 0, '-', std::int64_t(shares), price);
     if (shares) record_trade(*s, ts, 'Q', shares, price);
 }
 
@@ -385,6 +409,26 @@ void Replayer::write_depth(Stock& s, std::uint64_t ts) {
     std::fputc('\n', s.book_csv);
 }
 
+Replayer::OrderInfo Replayer::info(Stock& s, std::uint64_t ref) {
+    OrderInfo r;
+    with_book(s, 0, [&](auto& book, std::int64_t unit) {
+        if (const ob::Order* o = book.get(ref))
+            r = {true, o->side == ob::Side::Buy, std::uint32_t(o->price * unit), o->remaining};
+        return 0;
+    });
+    if (!r.found) {
+        auto it = s.side_table.find(ref);
+        if (it != s.side_table.end()) r = {true, it->second.buy, it->second.price, it->second.shares};
+    }
+    return r;
+}
+
+void Replayer::event(Stock& s, std::uint64_t ts, char type, std::uint64_t ref, char side, std::int64_t shares,
+                     std::uint32_t price, std::uint64_t new_ref) {
+    std::fprintf(s.events_csv, "%llu,%c,%llu,%c,%lld,%u,%llu\n", (unsigned long long)ts, type,
+                 (unsigned long long)ref, side, (long long)shares, price, (unsigned long long)new_ref);
+}
+
 void Replayer::open_tracking(Stock& s) {
     if (s.book_csv) return;
     const std::string base = opts_.out_dir + "/" + s.symbol;
@@ -395,6 +439,12 @@ void Replayer::open_tracking(Stock& s) {
     for (int i = 2; i <= opts_.depth; ++i) std::fprintf(s.book_csv, ",bid%d,bid_qty%d,ask%d,ask_qty%d", i, i, i, i);
     std::fputc('\n', s.book_csv);
     std::fprintf(s.trades_csv, "ts_ns,kind,price,shares\n");
+    if (opts_.events) {
+        s.events_csv = std::fopen((base + "_events.csv").c_str(), "w");
+        if (!s.events_csv) throw std::runtime_error("can't write CSVs to " + opts_.out_dir);
+        // price is in ITCH units (dollars * 10,000); for E/X/D it is the order's own price
+        std::fprintf(s.events_csv, "ts_ns,type,ref,side,shares,price,new_ref\n");
+    }
 }
 
 }  // namespace itch

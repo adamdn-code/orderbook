@@ -195,6 +195,16 @@ std::vector<Order> OrderBook::orders() const {
     return out;
 }
 
+std::vector<std::pair<OrderId, Qty>> OrderBook::level(Side side, Price price) const {
+    std::vector<std::pair<OrderId, Qty>> out;
+    // A price level holds bids only at or below the best bid, asks only at or above the best ask.
+    const bool on_side = side == Side::Buy ? (has_bid_ && price <= best_bid_) : (has_ask_ && price >= best_ask_);
+    if (!on_side || price < base_ || price >= base_ + Price(levels_.size())) return out;
+    for (std::uint32_t n = levels_[index_of(price)].head; n != kNil; n = pool_[n].next)
+        out.emplace_back(pool_[n].order.id, pool_[n].order.remaining);
+    return out;
+}
+
 const Order* OrderBook::get(OrderId id) const {
     const std::uint32_t* slot = index_.find(id);
     return slot ? &pool_[*slot].order : nullptr;

@@ -143,6 +143,24 @@ static void modify_price_can_trade() {
     CHECK(t.size() == 1 && t[0].buy_id == 2 && t[0].qty == 5);
 }
 
+static void level_lists_queue_in_order() {
+    OrderBook b;
+    b.add(Order::limit(1, B, 5, 100));
+    b.add(Order::limit(2, B, 7, 100));
+    b.add(Order::limit(3, B, 1, 99));
+    b.add(Order::limit(4, S, 2, 101));
+    b.modify(1, 3, std::nullopt);  // shrink keeps place
+    using L = std::vector<std::pair<OrderId, Qty>>;
+    CHECK(b.level(B, 100) == L({{1, 3}, {2, 7}}));
+    CHECK(b.level(B, 99) == L({{3, 1}}));
+    CHECK(b.level(S, 101) == L({{4, 2}}));
+    CHECK(b.level(S, 100).empty());   // bids live there, not asks
+    CHECK(b.level(B, 101).empty());
+    CHECK(b.level(B, 5'000).empty()); // outside the array
+    b.modify(1, 10, std::nullopt);    // grow: back of the queue
+    CHECK(b.level(B, 100) == L({{2, 7}, {1, 10}}));
+}
+
 static void depth_aggregates_levels() {
     OrderBook b;
     b.add(Order::limit(1, B, 5, 100));
@@ -531,6 +549,7 @@ int main() {
         {"modify_grow_loses_priority", modify_grow_loses_priority},
         {"modify_price_can_trade", modify_price_can_trade},
         {"depth_aggregates_levels", depth_aggregates_levels},
+        {"level_lists_queue_in_order", level_lists_queue_in_order},
         {"validation", validation},
         {"reserved_id_and_resting_duplicates", reserved_id_and_resting_duplicates},
         {"price_range_limit_rejects_without_side_effects", price_range_limit_rejects_without_side_effects},

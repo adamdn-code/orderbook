@@ -43,6 +43,7 @@ struct ReplayOptions {
     std::string out_dir = ".";
     std::uint64_t sample_ns = 1'000'000'000;  // book sample interval for the tracked symbol
     int depth = 1;                            // price levels per side to record for the tracked symbol
+    bool events = false;                      // also write every order event for the tracked symbol
 };
 
 struct Counts {
@@ -127,6 +128,7 @@ private:
         // tracking output
         std::FILE* book_csv = nullptr;
         std::FILE* trades_csv = nullptr;
+        std::FILE* events_csv = nullptr;
         std::uint64_t next_sample = 0;
     };
 
@@ -142,6 +144,15 @@ private:
     void record_trade(Stock& s, std::uint64_t ts, char kind, std::uint64_t shares, std::uint32_t price);
     void after(Stock& s, std::uint64_t ts);  // writes a book sample when one is due
     void write_depth(Stock& s, std::uint64_t ts);
+    struct OrderInfo {
+        bool found = false;
+        bool buy = false;
+        std::uint32_t price = 0;
+        std::int64_t remaining = 0;
+    };
+    OrderInfo info(Stock& s, std::uint64_t ref);
+    void event(Stock& s, std::uint64_t ts, char type, std::uint64_t ref, char side, std::int64_t shares,
+               std::uint32_t price, std::uint64_t new_ref = 0);
     void open_tracking(Stock& s);
 
     ReplayOptions opts_;

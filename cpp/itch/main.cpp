@@ -17,12 +17,13 @@ namespace {
 
 void usage() {
     std::fprintf(stderr,
-                 "usage: itch_replay FILE [--symbols A,B,..] [--track SYM] [--out DIR] [--sample-ms N] [--depth N]\n"
+                 "usage: itch_replay FILE [--symbols A,B,..] [--track SYM] [--out DIR] [--sample-ms N] [--depth N] [--events]\n"
                  "  --symbols   only rebuild these symbols (default: all)\n"
                  "  --track     write SYM_book.csv (top of book) and SYM_trades.csv to --out\n"
                  "  --out       directory for CSV output (default: .)\n"
                  "  --sample-ms book sample interval for --track (default: 1000)\n"
-                 "  --depth     price levels per side to record for --track (default: 1)\n");
+                 "  --depth     price levels per side to record for --track (default: 1)\n"
+                 "  --events    also write SYM_events.csv: every order event for --track\n");
 }
 
 double pct(std::uint64_t part, std::uint64_t whole) { return whole ? 100.0 * double(part) / double(whole) : 0.0; }
@@ -55,6 +56,8 @@ int main(int argc, char** argv) {
             opts.out_dir = next();
         } else if (a == "--sample-ms") {
             opts.sample_ns = std::stoull(next()) * 1'000'000ULL;
+        } else if (a == "--events") {
+            opts.events = true;
         } else if (a == "--depth") {
             opts.depth = std::max(1, std::stoi(next()));
         } else if (a == "-h" || a == "--help") {
@@ -134,8 +137,8 @@ int main(int argc, char** argv) {
                         pct(c.executions_front, c.executions));
         }
         if (!opts.track.empty())
-            std::printf("\nWrote %s/%s_book.csv and %s_trades.csv\n", opts.out_dir.c_str(), opts.track.c_str(),
-                        opts.track.c_str());
+            std::printf("\nWrote %s/%s_book.csv and %s_trades.csv%s\n", opts.out_dir.c_str(), opts.track.c_str(),
+                        opts.track.c_str(), opts.events ? (" and " + opts.track + "_events.csv").c_str() : "");
         return complete ? 0 : 1;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());

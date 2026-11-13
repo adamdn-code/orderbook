@@ -103,6 +103,9 @@ public:
     // same queues.
     std::vector<Order> orders() const;
 
+    // Orders resting at one price on one side, first in line first: (id, remaining).
+    std::vector<std::pair<OrderId, Qty>> level(Side side, Price price) const;
+
     // Pointer into the pool; valid until the next change to the book.
     const Order* get(OrderId id) const;
     std::size_t size() const { return index_.size(); }
