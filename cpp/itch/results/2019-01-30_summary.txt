@@ -1,0 +1,37 @@
+01302019.NASDAQ_ITCH50.gz  (Nasdaq TotalView-ITCH 5.0, Wednesday 2019-01-30; run on a 16-thread laptop under WSL)
+  368366634 messages, 11.25 GB uncompressed, 489.1 s  ->  0.75 M messages/s
+  by type: A=162970455 B=116 C=158886 D=158273361 E=8096995 F=1725898 H=8805 I=3684511 J=62 L=193769 P=1326184 Q=17430 R=8714 S=6 U=27222746 V=1 X=4669874 Y=8821
+  malformed messages: 0
+
+Order books
+  symbols with activity: 8695
+  orders added: 164696353, peak resting at once: 1742866, resting at end: 0
+  executions: 8096995 at the order's price (E), 158886 at another price (C)
+  shares traded: 1408908286 (incl. hidden and crosses), $76800617897 notional
+
+Checks against Nasdaq
+  messages naming an order our book didn't have: 0 of 198421862 (0.0000%)
+  executions/cancels larger than the order:       0
+  adds that would have crossed our book:          131 of 164696353 (0.0001%)
+  orders kept off the main book (side table):     1792450 (1.0883%)
+  executions at our best price:                   98.763%
+  executions hitting our first order in line:     98.677%
+
+Most traded
+  symbol           shares         VWAP   executions     orders   front%
+  AMD            39866581      22.2547       102135     850040   99.03%
+  HMNY           21136911       0.0111         3909      12341   99.57%
+  SPY            18596334     266.5108       137419    1382727  100.00%
+  VALE           18251831      12.4667        25882     329929  100.00%
+  EEM            14797898      42.4287        12963     390457  100.00%
+  AAPL           14515529     163.5602        89735     752975   98.96%
+  MSFT           13347965     105.3396        72479     754111   99.83%
+  SIRI           12540032       5.9264         7759      90554   98.96%
+  FB             12054147     152.9802        70543     572177   99.62%
+  CZR            11928705       8.9882        13557     114905   99.88%
+  T              10031383      29.3536        30697     318668  100.00%
+  QQQ             9803170     164.8726        55963    1623619   99.96%
+  GE              9584381       9.1236        12732     198813  100.00%
+  XLF             8707144      25.9620         5426     195678  100.00%
+  BAC             8606374      29.2519        15662     352486  100.00%
+
