@@ -70,7 +70,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spac
 .note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
 
 /* ladder */
-.ladder { display: grid; grid-template-columns: 1fr 76px 1fr; font-variant-numeric: tabular-nums; font-size: 14px; }
+.ladder { display: grid; grid-template-columns: 1fr 88px 1fr; font-variant-numeric: tabular-nums; font-size: 14px; }
 .ladder .row { display: contents; }
 .ladder .row > div { padding: 2px 6px; position: relative; min-height: 22px; display: flex; align-items: center; }
 .ladder .px { justify-content: center; font-weight: 500; }
@@ -207,8 +207,10 @@ const T0 = 9.5 * 3600, T1 = Math.max(16 * 3600, snapT[n - 1], tradeCount ? trade
 const isFedDay = D.date === "2019-01-30";
 
 // ---------- formatting ----------
-const pxDigits = S === 100 ? 2 : 4;
-const fmtPx = ticks => (ticks / S).toFixed(pxDigits);
+// Whole-cent prices show 2 decimals; sub-penny ones (e.g. hidden midpoint trades) show what they need.
+const centTicks = S / 100;
+const fmtPx = ticks => ticks % centTicks === 0 ? (ticks / S).toFixed(2) : (ticks / S).toFixed(4).replace(/0+$/, "");
+const fmtMid = v => (Math.round(v * 200) / 200).toFixed(Math.round(v * 100) === v * 100 ? 2 : 3);
 const fmtInt = x => Math.round(x).toLocaleString("en-US");
 function fmtTime(sec, ms = false) {
   const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = Math.floor(sec % 60);
@@ -319,7 +321,7 @@ function render() {
   el.quote.innerHTML = `<span class="b">${fmtPx(bp[i])}</span> × <span class="a">${fmtPx(ap[i])}</span>`;
   const spreadTicks = ap[i] - bp[i];
   const cents = spreadTicks * 100 / S;
-  el.spread.textContent = S === 100 ? `${cents}¢` : `${cents.toFixed(2)}¢`;
+  el.spread.textContent = Number.isInteger(Math.round(cents * 1e6) / 1e6) ? `${Math.round(cents)}¢` : `${cents.toFixed(2)}¢`;
   ladderSpread.textContent = `spread ${el.spread.textContent}`;
   el.vol.textContent = fmtInt(cumVol[k]);
   el.vwap.textContent = cumVol[k] ? `VWAP $${(cumNot[k] / cumVol[k]).toFixed(2)}` : "VWAP --";
@@ -483,7 +485,7 @@ el.cursor.addEventListener("pointerdown", e => { dragging = true; el.cursor.setP
 el.cursor.addEventListener("pointermove", e => {
   const x = xFromEvent(e), tt = tOfX(x), i = snapAt(tt);
   el.tip.style.display = "block";
-  el.tip.textContent = `${fmtTime(tt)}  $${mid[i].toFixed(pxDigits)}`;
+  el.tip.textContent = `${fmtTime(tt)}  mid $${fmtMid(mid[i])}`;
   const left = Math.min(Math.max(0, x + 12), geom.w - el.tip.offsetWidth - 4);
   el.tip.style.left = `${left}px`; el.tip.style.top = "8px";
   if (dragging) seek(tt);

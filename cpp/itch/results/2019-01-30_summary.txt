@@ -1,5 +1,5 @@
 01302019.NASDAQ_ITCH50.gz  (Nasdaq TotalView-ITCH 5.0, Wednesday 2019-01-30; run on a 16-thread laptop under WSL)
-  368366634 messages, 11.25 GB uncompressed, 489.1 s  ->  0.75 M messages/s
+  368366634 messages, 11.25 GB uncompressed, 560.4 s  ->  0.66 M messages/s
   by type: A=162970455 B=116 C=158886 D=158273361 E=8096995 F=1725898 H=8805 I=3684511 J=62 L=193769 P=1326184 Q=17430 R=8714 S=6 U=27222746 V=1 X=4669874 Y=8821
   malformed messages: 0
 
@@ -13,9 +13,10 @@ Checks against Nasdaq
   messages naming an order our book didn't have: 0 of 198421862 (0.0000%)
   executions/cancels larger than the order:       0
   adds that would have crossed our book:          131 of 164696353 (0.0001%)
-  orders kept off the main book (side table):     1792450 (1.0883%)
-  executions at our best price:                   98.763%
-  executions hitting our first order in line:     98.677%
+  orders kept off the main book (side table):     1012431 (0.6147%)
+  stocks switched to the sub-penny book:          1285
+  executions at our best price:                   99.313%
+  executions hitting our first order in line:     99.226%
 
 Most traded
   symbol           shares         VWAP   executions     orders   front%
@@ -35,3 +36,4 @@ Most traded
   XLF             8707144      25.9620         5426     195678  100.00%
   BAC             8606374      29.2519        15662     352486  100.00%
 
+Wrote /home/adam/itch/AAPL_book.csv and AAPL_trades.csv

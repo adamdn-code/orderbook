@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml/badge.svg)](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml)
 
+**[Live demo: replay Apple's order book on 2019-01-30](https://adamdn-code.github.io/orderbook/)**, rebuilt from 368M raw Nasdaq messages.
+
 A single-threaded limit order book in Python with price-time priority, like the matching engine an exchange runs. No dependencies.
 
 ## Features
@@ -38,7 +40,7 @@ python -m unittest -v        # all tests
 `cpp/` has a C++17 port of the book plus a lock-free engine (one SPSC ring per client per symbol, no per-order allocation), with tests and benchmarks. See `cpp/README.md`.
 
 ## Replaying real Nasdaq data
-`cpp/itch/` parses Nasdaq's raw TotalView-ITCH 5.0 feed and rebuilds every stock's order book with the C++ book. On a full real day (2019-01-30): 368 million messages and 8,695 stocks. **0 of 198 million** executions, cancels, deletes and replaces named an order the book didn't have, the book was empty at the close as Nasdaq's is, and 98.7% of executions hit the order the book had first in line. See `cpp/itch/README.md`.
+`cpp/itch/` parses Nasdaq's raw TotalView-ITCH 5.0 feed and rebuilds every stock's order book with the C++ book. On a full real day (2019-01-30): 368 million messages and 8,695 stocks. **0 of 198 million** executions, cancels, deletes and replaces named an order the book didn't have, the book was empty at the close as Nasdaq's is, and 99.2% of executions hit the order the book had first in line. See `cpp/itch/README.md`.
 
 ![AAPL on 2019-01-30, rebuilt from Nasdaq ITCH](cpp/itch/results/AAPL_2019-01-30.png)
 

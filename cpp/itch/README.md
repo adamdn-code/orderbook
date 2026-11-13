@@ -11,7 +11,7 @@ Replaying Nasdaq's complete feed for Wednesday, January 30, 2019 ([full output](
 | Stocks rebuilt | 8,695 |
 | Orders added | 164.7 million, up to 1.74 million resting at once |
 | Shares traded | 1.41 billion, $76.8 billion notional |
-| Time | 489 s on a laptop under WSL (0.75M messages/s) |
+| Time | 560 s on a laptop under WSL (0.66M messages/s) |
 
 **Checks against Nasdaq**
 
@@ -21,10 +21,25 @@ Replaying Nasdaq's complete feed for Wednesday, January 30, 2019 ([full output](
 | Executions or cancels larger than the order | **0** |
 | Orders resting at the end of the day (Nasdaq clears the book at close) | **0** |
 | Adds that would have crossed the book | 131 of 164.7 million (0.0001%) |
-| Executions at the book's best price | 98.76% |
-| Executions hitting the order first in line | 98.68% (SPY, VALE, EEM, T, GE, BAC: 100%) |
+| Orders kept in the side table | 0.61% (1,285 stocks moved to the sub-penny book) |
+| Executions at the book's best price | 99.31% |
+| Executions hitting the order first in line | **99.23%** (SPY, VALE, EEM, T, GE, BAC: 100%) |
 
 Every order the feed referred to was where the book said it would be, and the book emptied exactly at the close.
+
+**Interactive replay:** [adamdn-code.github.io/orderbook](https://adamdn-code.github.io/orderbook/). Scrub through Apple's day with a 10-level depth ladder and trade tape. It's built by `make_viewer.py` from `itch_replay --track AAPL --depth 10` output into one self-contained page (`docs/index.html`).
+
+**Apple's day, rebuilt from the raw feed**
+
+![AAPL on 2019-01-30](results/AAPL_2019-01-30.png)
+
+The opening and closing crosses are the two volume spikes at 9:30 and 4:00 (black). The spread is widest just after the open and narrows through the day. At 2:00 pm, the time of that afternoon's Federal Reserve announcement, the price jumps, the spread blows out to about 7¢ on average, and volume spikes, all visible straight from the order-level data.
+
+**What the remaining gaps are**
+- **Stub quotes.** A stock whose first order of the day is a stub quote above $1 but which trades under $1 (HMNY, MoviePass, about 1¢ that day) used to land in the cents book with its sub-penny orders in the side table. It is now rebuilt as a tick book on its first sub-penny order, which raised first-in-line from 98.68% to 99.23%. What's left in the side table is mostly orders priced far from the market and the 131 crossing adds.
+- **The remaining ~0.8% of executions not first in line** include executions of side-table orders, which the check can't place in a queue, plus cases where Nasdaq's priority differs from plain price-time (for example, displayed orders trading ahead of reserve size).
+
+**Interactive replay:** [adamdn-code.github.io/orderbook](https://adamdn-code.github.io/orderbook/). Scrub through Apple's day with a 10-level depth ladder and trade tape. It's built by `make_viewer.py` from `itch_replay --track AAPL --depth 10` output into one self-contained page (`docs/index.html`).
 
 **Apple's day, rebuilt from the raw feed**
 
@@ -53,6 +68,10 @@ No need to unzip it: the tool reads `.gz` directly.
 make -C cpp itch      # needs zlib: sudo apt install zlib1g-dev
 ./cpp/build/itch_replay ~/itch/01302019.NASDAQ_ITCH50.gz --track AAPL --out ~/itch
 python3 cpp/itch/plot_symbol.py AAPL --dir ~/itch     # -> ~/itch/AAPL_day.png
+
+# interactive viewer (record 10 levels of depth first)
+./cpp/build/itch_replay ~/itch/01302019.NASDAQ_ITCH50.gz --track AAPL --depth 10 --out ~/itch | tee ~/itch/run.txt
+python3 cpp/itch/make_viewer.py AAPL --dir ~/itch --date 2019-01-30 --summary ~/itch/run.txt --out docs/index.html
 ```
 Options: `--symbols AAPL,MSFT` rebuilds only those books (faster), `--track SYM` writes that stock's book and trades to CSV, `--depth N` records N price levels per side instead of just the best, and `--sample-ms N` sets how often the book is sampled.
 
@@ -85,4 +104,4 @@ The tool reports each of these as a count or percentage. It also reports through
 A randomized test generates 60k messages from an independently tracked "true" book. It requires the replay to match that book's best bid and ask at every checkpoint, with zero inconsistencies and 100% of executions at the front of the queue.
 
 ## Speed
-The real day above ran at 0.75M messages/s (489 s) on a laptop under WSL. On a synthetic 40M-message file (2-core cloud VM), reading and decoding alone runs at 10.5M messages/s and the full replay at 2.0–2.5M messages/s. So the time goes to the book updates, which are spread across 8,695 books and over a million resting orders, so most lookups miss the CPU cache. Batching each stock's messages, or splitting stocks across threads (each stock's book is independent), are the obvious next speedups.
+The real day above ran at 0.66–0.75M messages/s (8–9 minutes) on a laptop under WSL. On a synthetic 40M-message file (2-core cloud VM), reading and decoding alone runs at 10.5M messages/s and the full replay at 2.0–2.5M messages/s. So the time goes to the book updates, which are spread across 8,695 books and over a million resting orders, so most lookups miss the CPU cache. Batching each stock's messages, or splitting stocks across threads (each stock's book is independent), are the obvious next speedups.
