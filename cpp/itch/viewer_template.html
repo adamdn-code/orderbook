@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__SYMBOL__ Order Book Replay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* One committed visual world: an exchange board at night. Bids cool, asks warm. */
+  --ink: #0e1a2b;      /* page */
+  --panel: #142339;    /* raised surfaces */
+  --line: #233650;     /* grid, borders */
+  --text: #dde6f1;
+  --muted: #8a9bb4;
+  --bid: #4cb5df;
+  --ask: #efa54b;
+  --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  /* layout: board of big numerals, full-width day chart, then ladder | tape | notes */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+body { padding: 20px clamp(16px, 3vw, 40px) 40px; max-width: 1440px; margin: 0 auto; }
+a { color: var(--bid); }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--ask); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- header ---------- */
+.top { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 44px); letter-spacing: 0.01em; line-height: 1; margin: 0; text-wrap: balance; }
+h1 .sym { color: var(--ask); }
+.sub { margin: 6px 0 0; color: var(--muted); }
+.repo { font-weight: 500; white-space: nowrap; }
+
+/* ---------- the board: the one loud element ---------- */
+.board { margin-top: 22px; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1.5fr) minmax(0, 0.7fr) minmax(0, 1.1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.cell { background: var(--panel); padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.label { color: var(--muted); font-size: 12.5px; }
+.big { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 3.6vw, 54px); line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mid-val { font-family: var(--display); font-weight: 500; font-size: clamp(22px, 2.4vw, 30px); line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#quote .b { color: var(--bid); } #quote .a { color: var(--ask); }
+.event { color: var(--ask); font-size: 13px; min-height: 1.4em; }
+
+/* ---------- controls ---------- */
+.controls { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+button, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 6px 12px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--muted); }
+#play { min-width: 92px; font-weight: 600; }
+#play[aria-pressed="true"] { background: var(--ask); color: var(--ink); border-color: var(--ask); }
+.speed { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.moments { display: flex; flex-wrap: wrap; gap: 6px; }
+.moments button { font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.moments button.active { border-color: var(--ask); color: var(--ask); }
+.keys { color: var(--muted); font-size: 12.5px; margin-left: auto; }
+
+/* ---------- day chart ---------- */
+.chart { position: relative; margin-top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; height: 260px; }
+.chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cursor { cursor: crosshair; touch-action: none; }
+#tip { position: absolute; pointer-events: none; background: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; font-size: 12.5px; white-space: nowrap; display: none; font-variant-numeric: tabular-nums; }
+
+/* ---------- lower grid ---------- */
+.grid { margin-top: 16px; display: grid; grid-template-columns: minmax(300px, 1.05fr) minmax(260px, 0.95fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; margin: 0 0 10px; }
+.note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
+
+/* ladder */
+.ladder { display: grid; grid-template-columns: 1fr 76px 1fr; font-variant-numeric: tabular-nums; font-size: 14px; }
+.ladder .row { display: contents; }
+.ladder .row > div { padding: 2px 6px; position: relative; min-height: 22px; display: flex; align-items: center; }
+.ladder .px { justify-content: center; font-weight: 500; }
+.ladder .ask .px { color: var(--ask); } .ladder .bid .px { color: var(--bid); }
+.ladder .qty { gap: 6px; }
+.ladder .ask .qty.r { justify-content: flex-start; } .ladder .bid .qty.l { justify-content: flex-end; }
+.ladder .bar { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; opacity: 0.35; }
+.ladder .ask .bar { left: 0; background: var(--ask); } .ladder .bid .bar { right: 0; background: var(--bid); }
+.ladder .qtext { position: relative; }
+.ladder .row.best > div { border-top: 1px solid transparent; }
+.ladder .ask.best .px, .ladder .bid.best .px { font-weight: 600; }
+.ladder .spreadrow > div { min-height: 28px; color: var(--muted); font-size: 12.5px; justify-content: center; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.ladder .changed .qtext { animation: pulse 0.6s ease-out; }
+@keyframes pulse { from { color: var(--text); text-shadow: 0 0 8px currentColor; } to { text-shadow: none; } }
+.ladder .colhead > div { color: var(--muted); font-size: 12px; min-height: 18px; }
+
+/* tape */
+#tape { list-style: none; margin: 0; padding: 0; font-variant-numeric: tabular-nums; font-size: 14px; }
+#tape li { display: grid; grid-template-columns: 9.5em 5.2em 1fr auto; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+#tape li:last-child { border-bottom: 0; }
+#tape .t { color: var(--muted); }
+#tape .q { text-align: right; }
+#tape .k { font-size: 11.5px; padding: 0 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); }
+#tape .up { color: var(--ask); } #tape .down { color: var(--bid); }
+#tape .k.cross { border-color: var(--text); color: var(--text); }
+#tape .empty { color: var(--muted); display: block; border: 0; }
+
+/* about */
+.facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.facts li { display: grid; grid-template-columns: 6.4em 1fr; gap: 10px; align-items: baseline; }
+.facts .n { font-family: var(--display); font-weight: 700; font-size: 24px; line-height: 1; font-variant-numeric: tabular-nums; text-align: right; }
+.facts .ok { color: var(--bid); }
+.about p { margin: 12px 0 0; max-width: 62ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+@media (max-width: 1100px) {
+  .board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .board .cell:nth-child(3) { grid-column: span 2; }
+  .grid { grid-template-columns: 1fr 1fr; }
+  .grid .about { grid-column: span 2; }
+  .keys { display: none; }
+}
+@media (max-width: 680px) {
+  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid { grid-template-columns: 1fr; }
+  .grid .about { grid-column: auto; }
+  .chart { height: 210px; }
+  #tape li { grid-template-columns: 7.6em 4.6em 1fr auto; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ladder .changed .qtext { animation: none; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1><span class="sym" id="sym">__SYMBOL__</span> order book, replayed</h1>
+    <p class="sub" id="sub">Nasdaq TotalView-ITCH, rebuilt message by message by a C++ order book</p>
+  </div>
+  <a class="repo" href="https://github.com/adamdn-code/orderbook">Source on GitHub</a>
+</header>
+
+<section class="board" aria-label="Book at the selected time">
+  <div class="cell"><span class="label">Time (ET)</span><span class="big" id="clock">--:--:--</span></div>
+  <div class="cell"><span class="label">Last trade</span><span class="big" id="last">--</span></div>
+  <div class="cell"><span class="label">Best bid × best ask</span><span class="mid-val" id="quote">--</span><span class="event" id="event"></span></div>
+  <div class="cell"><span class="label">Spread</span><span class="mid-val" id="spread">--</span></div>
+  <div class="cell"><span class="label">Shares traded so far</span><span class="mid-val" id="vol">--</span><span class="label" id="vwap">VWAP --</span></div>
+</section>
+
+<section class="controls" aria-label="Replay controls">
+  <button id="play" aria-pressed="false">Play</button>
+  <label class="speed" for="speed">Speed
+    <select id="speed">
+      <option value="1">1× real time</option>
+      <option value="10">10×</option>
+      <option value="60" selected>60×</option>
+      <option value="300">300×</option>
+    </select>
+  </label>
+  <div class="moments" id="moments" aria-label="Jump to"></div>
+  <span class="keys">Space play/pause · ← → 10 s · Shift ← → 1 min</span>
+</section>
+
+<section class="chart" aria-label="Price through the day. Click or drag to move through the day.">
+  <canvas id="day" aria-hidden="true"></canvas>
+  <canvas id="cursor" tabindex="0" aria-label="Day chart: click or drag to set the time"></canvas>
+  <div id="tip"></div>
+</section>
+
+<main class="grid">
+  <section class="box">
+    <h2>Depth ladder</h2>
+    <div class="ladder" id="ladder"></div>
+    <p class="note" id="ladder-note">Shares resting at each price, asks above and bids below.</p>
+  </section>
+  <section class="box">
+    <h2>Trades</h2>
+    <ol id="tape"></ol>
+    <div class="legend">
+      <span><i style="background:var(--ask)"></i>at or above mid (buyer took the ask)</span>
+      <span><i style="background:var(--bid)"></i>below mid (seller hit the bid)</span>
+    </div>
+  </section>
+  <section class="box about">
+    <h2>How this was made</h2>
+    <ul class="facts" id="facts"></ul>
+    <p>Nasdaq publishes every order event on its exchange as a binary feed called ITCH. A C++ program read the whole day's file and applied each add, execution, cancel and replace to an order book for every stock, the same price-time-priority book this repo builds and benchmarks. This page plays back the rebuilt book for one stock.</p>
+    <p class="note">Lit: a displayed order traded. Hidden: a non-displayed order traded. Cross: the opening or closing auction.</p>
+  </section>
+</main>
+
+<script>
+"use strict";
+const D = /*__DATA__*/null;
+
+// ---------- decode ----------
+const S = D.scale, N = D.depth, n = D.snap_t.length;
+const snapT = Float64Array.from(D.snap_t);
+const bp = Int32Array.from(D.bp), ap = Int32Array.from(D.ap);
+const tradeCount = D.trade_p.length;
+const tradeT = new Float64Array(tradeCount);
+{ let ms = D.trade_t0; for (let i = 0; i < tradeCount; i++) { ms += D.trade_dt[i]; tradeT[i] = ms / 1000; } }
+const cumVol = new Float64Array(tradeCount + 1), cumNot = new Float64Array(tradeCount + 1);
+for (let i = 0; i < tradeCount; i++) {
+  cumVol[i + 1] = cumVol[i] + D.trade_q[i];
+  cumNot[i + 1] = cumNot[i] + D.trade_q[i] * D.trade_p[i] / S;
+}
+const mid = new Float64Array(n);
+for (let i = 0; i < n; i++) mid[i] = (bp[i] + ap[i]) / 2 / S;
+const T0 = 9.5 * 3600, T1 = Math.max(16 * 3600, snapT[n - 1], tradeCount ? tradeT[tradeCount - 1] : 0);
+const isFedDay = D.date === "2019-01-30";
+
+// ---------- formatting ----------
+const pxDigits = S === 100 ? 2 : 4;
+const fmtPx = ticks => (ticks / S).toFixed(pxDigits);
+const fmtInt = x => Math.round(x).toLocaleString("en-US");
+function fmtTime(sec, ms = false) {
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = Math.floor(sec % 60);
+  const base = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return ms ? `${base}.${String(Math.floor(sec * 1000) % 1000).padStart(3, "0")}` : base;
+}
+function upperBound(arr, x) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] <= x) lo = m + 1; else hi = m; } return lo; }
+const snapAt = t => Math.max(0, upperBound(snapT, t) - 1);
+const tradesUpTo = t => upperBound(tradeT, t);
+
+// ---------- key moments, found in the data ----------
+const moments = [];
+{
+  const crosses = [];
+  for (let i = 0; i < tradeCount; i++) if (D.trade_k[i] === 2) crosses.push(i);
+  if (crosses.length) moments.push({ t: tradeT[crosses[0]], label: "Opening cross" });
+  let lo = 0, hi = 0;
+  for (let i = 0; i < n; i++) { if (mid[i] < mid[lo]) lo = i; if (mid[i] > mid[hi]) hi = i; }
+  if (isFedDay) moments.push({ t: 14 * 3600 - 20, label: "Fed statement, 2:00 pm", mark: 14 * 3600,
+    note: "2:00 pm: the Federal Reserve's statement says it will be “patient” on rates" });
+  moments.push({ t: snapT[lo], label: "Day low" });
+  moments.push({ t: snapT[hi], label: "Day high" });
+  if (crosses.length > 1) moments.push({ t: tradeT[crosses[crosses.length - 1]], label: "Closing cross" });
+  moments.sort((a, b) => a.t - b.t);
+}
+
+// ---------- state ----------
+let t = isFedDay ? 14 * 3600 - 20 : snapT[Math.min(n - 1, 30)];
+let playing = false, speed = 60, lastFrame = 0, lastSnap = -1;
+const prevQty = new Map();
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const el = {
+  clock: $("clock"), last: $("last"), quote: $("quote"), spread: $("spread"), vol: $("vol"), vwap: $("vwap"),
+  event: $("event"), play: $("play"), speed: $("speed"), moments: $("moments"), ladder: $("ladder"),
+  tape: $("tape"), facts: $("facts"), day: $("day"), cursor: $("cursor"), tip: $("tip"), sub: $("sub"),
+  note: $("ladder-note"),
+};
+if (D.date) {
+  const d = new Date(D.date + "T12:00:00Z");
+  el.sub.textContent = `Nasdaq TotalView-ITCH, ${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}. Rebuilt message by message by a C++ order book.`;
+}
+el.note.textContent = `Shares resting at each of the top ${N} prices, asks above and bids below. Book sampled every ${D.step} s.`;
+
+// facts
+{
+  const s = D.summary || {};
+  const facts = [];
+  if (s.messages) facts.push([`${(s.messages / 1e6).toFixed(0)}M`, `Nasdaq messages replayed${s.stocks ? `, rebuilding ${fmtInt(s.stocks)} stocks' books` : ""}${s.seconds ? ` in ${Math.round(s.seconds / 60)} minutes` : ""}`]);
+  if (s.refs != null) facts.push([`${fmtInt(s.missing)}`, `of ${fmtInt(s.refs)} executions, cancels and replaces named an order the book didn't have`, true]);
+  if (s.front_pct != null) facts.push([`${s.front_pct.toFixed(1)}%`, "of executions hit the order the book had first in line (price-time priority)", true]);
+  if (s.resting_end != null) facts.push([fmtInt(s.resting_end), "orders left at the close, matching Nasdaq's empty book", true]);
+  facts.push([fmtInt(tradeCount), `${D.symbol} trades in the regular session`]);
+  for (const [nVal, text, ok] of facts) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="n${ok ? " ok" : ""}"></span><span></span>`;
+    li.children[0].textContent = nVal; li.children[1].textContent = text;
+    el.facts.appendChild(li);
+  }
+}
+
+// moment chips
+for (const m of moments) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = `${m.label} · ${fmtTime(m.mark ?? m.t).slice(0, 5)}`;
+  b.addEventListener("click", () => { setPlaying(false); seek(m.t); });
+  m.button = b; el.moments.appendChild(b);
+}
+
+// ladder rows: asks worst..best, spread row, bids best..worst
+const ladderRows = [];
+{
+  const head = document.createElement("div"); head.className = "row colhead";
+  head.innerHTML = '<div style="justify-content:flex-end">Bid size</div><div style="justify-content:center">Price</div><div>Ask size</div>';
+  el.ladder.appendChild(head);
+  const make = (side, level) => {
+    const row = document.createElement("div"); row.className = `row ${side}${level === 1 ? " best" : ""}`;
+    row.innerHTML = side === "ask"
+      ? '<div class="qty l"></div><div class="px"></div><div class="qty r"><span class="bar"></span><span class="qtext"></span></div>'
+      : '<div class="qty l"><span class="bar"></span><span class="qtext"></span></div><div class="px"></div><div class="qty r"></div>';
+    el.ladder.appendChild(row);
+    const qcell = side === "ask" ? row.children[2] : row.children[0];
+    return { row, side, level, px: row.children[1], bar: qcell.querySelector(".bar"), qtext: qcell.querySelector(".qtext") };
+  };
+  for (let lv = N; lv >= 1; lv--) ladderRows.push(make("ask", lv));
+  const sp = document.createElement("div"); sp.className = "row spreadrow";
+  sp.innerHTML = '<div></div><div id="ladder-spread"></div><div></div>';
+  el.ladder.appendChild(sp);
+  for (let lv = 1; lv <= N; lv++) ladderRows.push(make("bid", lv));
+}
+const ladderSpread = document.getElementById("ladder-spread");
+
+function levelAt(i, side, level) {
+  const q = (side === "ask" ? D.aq : D.bq)[i * N + level - 1];
+  if (level === 1) return { p: side === "ask" ? ap[i] : bp[i], q };
+  const off = (side === "ask" ? D.ao : D.bo)[i * (N - 1) + level - 2];
+  if (!off || !q) return null;
+  return { p: side === "ask" ? ap[i] + off : bp[i] - off, q };
+}
+
+// ---------- rendering ----------
+function render() {
+  const i = snapAt(t);
+  const k = tradesUpTo(t);
+  el.clock.textContent = fmtTime(t);
+  el.last.textContent = k ? `$${fmtPx(D.trade_p[k - 1])}` : "--";
+  el.quote.innerHTML = `<span class="b">${fmtPx(bp[i])}</span> × <span class="a">${fmtPx(ap[i])}</span>`;
+  const spreadTicks = ap[i] - bp[i];
+  const cents = spreadTicks * 100 / S;
+  el.spread.textContent = S === 100 ? `${cents}¢` : `${cents.toFixed(2)}¢`;
+  ladderSpread.textContent = `spread ${el.spread.textContent}`;
+  el.vol.textContent = fmtInt(cumVol[k]);
+  el.vwap.textContent = cumVol[k] ? `VWAP $${(cumNot[k] / cumVol[k]).toFixed(2)}` : "VWAP --";
+
+  const active = moments.find(m => m.note && t >= m.mark && t < m.mark + 1800);
+  el.event.textContent = active ? active.note : "";
+  for (const m of moments) m.button.classList.toggle("active", Math.abs(t - m.t) < 1);
+
+  // ladder
+  let maxQ = 1;
+  const levels = ladderRows.map(r => { const v = levelAt(i, r.side, r.level); if (v && v.q > maxQ) maxQ = v.q; return v; });
+  const animate = playing && i !== lastSnap;
+  ladderRows.forEach((r, j) => {
+    const v = levels[j];
+    if (!v) { r.px.textContent = ""; r.qtext.textContent = ""; r.bar.style.width = "0"; return; }
+    r.px.textContent = fmtPx(v.p);
+    r.qtext.textContent = fmtInt(v.q);
+    r.bar.style.width = `${(v.q / maxQ * 100).toFixed(1)}%`;
+    const key = `${r.side}${v.p}`;
+    if (animate && prevQty.has(key) && prevQty.get(key) !== v.q) {
+      r.row.classList.remove("changed"); void r.row.offsetWidth; r.row.classList.add("changed");
+    }
+  });
+  prevQty.clear();
+  ladderRows.forEach((r, j) => { if (levels[j]) prevQty.set(`${r.side}${levels[j].p}`, levels[j].q); });
+  lastSnap = i;
+
+  // tape: newest first
+  const rows = [];
+  for (let j = k - 1; j >= Math.max(0, k - 14); j--) {
+    const kind = D.trade_k[j];
+    const si = snapAt(tradeT[j]);
+    const up = D.trade_p[j] * 2 >= bp[si] + ap[si];
+    const tag = kind === 2 ? '<span class="k cross">cross</span>' : kind === 1 ? '<span class="k">hidden</span>' : '<span class="k">lit</span>';
+    rows.push(`<li><span class="t">${fmtTime(tradeT[j], true)}</span><span class="${kind === 2 ? "" : up ? "up" : "down"}">${fmtPx(D.trade_p[j])}</span><span class="q">${fmtInt(D.trade_q[j])}</span>${tag}</li>`);
+  }
+  el.tape.innerHTML = rows.length ? rows.join("") : '<li class="empty">No trades yet.</li>';
+
+  drawCursor();
+}
+
+// ---------- day chart ----------
+const ctxDay = el.day.getContext("2d"), ctxCur = el.cursor.getContext("2d");
+let geom = null;
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function layoutChart() {
+  const r = el.day.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  for (const c of [el.day, el.cursor]) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }
+  for (const c of [ctxDay, ctxCur]) c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const padL = 54, padR = 14, padT = 14, volH = Math.round(r.height * 0.2), axisH = 22;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) { if (mid[i] < lo) lo = mid[i]; if (mid[i] > hi) hi = mid[i]; }
+  const pad = Math.max((hi - lo) * 0.08, 0.02); lo -= pad; hi += pad;
+  geom = { w: r.width, h: r.height, padL, padR, padT, volH, axisH, lo, hi,
+    priceBottom: r.height - axisH - volH - 8, volBottom: r.height - axisH };
+  drawDay();
+}
+const xOf = s => geom.padL + (s - T0) / (T1 - T0) * (geom.w - geom.padL - geom.padR);
+const yOf = p => geom.padT + (geom.hi - p) / (geom.hi - geom.lo) * (geom.priceBottom - geom.padT);
+const tOfX = x => Math.min(T1, Math.max(T0, T0 + (x - geom.padL) / (geom.w - geom.padL - geom.padR) * (T1 - T0)));
+
+function niceStep(range, target) {
+  const raw = range / target, mag = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || mag * 10;
+}
+
+function drawDay() {
+  const c = ctxDay, g = geom;
+  c.clearRect(0, 0, g.w, g.h);
+  c.font = `12px ${css("--body")}`; c.textBaseline = "middle";
+  // price grid
+  const step = niceStep(g.hi - g.lo, 5);
+  c.strokeStyle = css("--line"); c.fillStyle = css("--muted"); c.lineWidth = 1;
+  for (let p = Math.ceil(g.lo / step) * step; p <= g.hi; p += step) {
+    const y = Math.round(yOf(p)) + 0.5;
+    c.beginPath(); c.moveTo(g.padL, y); c.lineTo(g.w - g.padR, y); c.stroke();
+    c.textAlign = "right"; c.fillText(`$${p.toFixed(step < 0.1 ? 2 : step < 1 ? 2 : 0)}`, g.padL - 8, y);
+  }
+  // time axis
+  c.textAlign = "center"; c.textBaseline = "alphabetic";
+  for (let h = 10; h <= 16; h++) {
+    const x = Math.round(xOf(h * 3600)) + 0.5;
+    c.beginPath(); c.moveTo(x, g.padT); c.lineTo(x, g.volBottom); c.stroke();
+    c.fillText(h <= 12 ? `${h}${h === 12 ? " pm" : " am"}` : `${h - 12} pm`, x, g.h - 6);
+  }
+  // volume per minute
+  const perMin = new Map();
+  let maxV = 1;
+  for (let i = 0; i < tradeCount; i++) {
+    const m = Math.floor(tradeT[i] / 60);
+    const e = perMin.get(m) || { v: 0, cross: 0 };
+    if (D.trade_k[i] === 2) e.cross += D.trade_q[i]; else e.v += D.trade_q[i];
+    perMin.set(m, e);
+  }
+  for (const e of perMin.values()) maxV = Math.max(maxV, e.v);
+  const bw = Math.max(1, (g.w - g.padL - g.padR) / ((T1 - T0) / 60) - 0.5);
+  c.fillStyle = css("--muted"); c.globalAlpha = 0.45;
+  for (const [m, e] of perMin) {
+    const hgt = Math.min(1, e.v / maxV) * g.volH;
+    c.fillRect(xOf(m * 60), g.volBottom - hgt, bw, hgt);
+  }
+  c.globalAlpha = 1;
+  c.fillStyle = css("--text");
+  for (const [m, e] of perMin) if (e.cross) c.fillRect(xOf(m * 60) - 1, g.volBottom - g.volH, bw + 2, g.volH);  // auctions dwarf everything: full height
+  c.fillStyle = css("--muted"); c.textAlign = "left"; c.font = `11px ${css("--body")}`;
+  c.fillText("volume / min", g.padL + 4, g.volBottom - g.volH + 10);
+  // moments markers
+  for (const m of moments) if (m.mark) {
+    const x = Math.round(xOf(m.mark)) + 0.5;
+    c.strokeStyle = css("--ask"); c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(x, g.padT); c.lineTo(x, g.volBottom); c.stroke(); c.setLineDash([]);
+    c.fillStyle = css("--ask"); c.textAlign = "right"; c.font = `12px ${css("--body")}`;
+    c.fillText("Fed statement", x - 5, g.padT + 10);
+  }
+  // mid price: area + line
+  const grad = c.createLinearGradient(0, g.padT, 0, g.priceBottom);
+  grad.addColorStop(0, "rgba(76,181,223,0.28)"); grad.addColorStop(1, "rgba(76,181,223,0)");
+  c.beginPath();
+  for (let i = 0; i < n; i++) { const x = xOf(snapT[i]), y = yOf(mid[i]); i ? c.lineTo(x, y) : c.moveTo(x, y); }
+  c.lineTo(xOf(snapT[n - 1]), g.priceBottom); c.lineTo(xOf(snapT[0]), g.priceBottom); c.closePath();
+  c.fillStyle = grad; c.fill();
+  c.beginPath();
+  for (let i = 0; i < n; i++) { const x = xOf(snapT[i]), y = yOf(mid[i]); i ? c.lineTo(x, y) : c.moveTo(x, y); }
+  c.strokeStyle = css("--text"); c.lineWidth = 1.2; c.lineJoin = "round"; c.stroke();
+}
+
+function drawCursor() {
+  if (!geom) return;
+  const c = ctxCur, g = geom;
+  c.clearRect(0, 0, g.w, g.h);
+  const x = Math.round(xOf(t)) + 0.5, i = snapAt(t), y = yOf(mid[i]);
+  c.fillStyle = "rgba(14,26,43,0.45)"; c.fillRect(x, g.padT, g.w - g.padR - x, g.volBottom - g.padT);  // the future, dimmed
+  c.strokeStyle = css("--ask"); c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(x, g.padT); c.lineTo(x, g.volBottom); c.stroke();
+  c.fillStyle = css("--ask"); c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2); c.fill();
+}
+
+// ---------- interaction ----------
+function seek(nt) { t = Math.min(T1, Math.max(T0, nt)); render(); saveState(); }
+function setPlaying(p) {
+  playing = p && t < T1;
+  el.play.setAttribute("aria-pressed", String(playing));
+  el.play.textContent = playing ? "Pause" : "Play";
+  if (playing) { lastFrame = performance.now(); requestAnimationFrame(tick); }
+}
+function tick(now) {
+  if (!playing) return;
+  const dt = Math.min(0.25, (now - lastFrame) / 1000); lastFrame = now;
+  t += dt * speed;
+  if (t >= T1) { t = T1; setPlaying(false); }
+  render();
+  if (playing) requestAnimationFrame(tick);
+}
+el.play.addEventListener("click", () => { if (t >= T1) t = T0; setPlaying(!playing); });
+el.speed.addEventListener("change", () => { speed = Number(el.speed.value); });
+
+let dragging = false;
+const xFromEvent = e => e.clientX - el.cursor.getBoundingClientRect().left;
+el.cursor.addEventListener("pointerdown", e => { dragging = true; el.cursor.setPointerCapture(e.pointerId); seek(tOfX(xFromEvent(e))); });
+el.cursor.addEventListener("pointermove", e => {
+  const x = xFromEvent(e), tt = tOfX(x), i = snapAt(tt);
+  el.tip.style.display = "block";
+  el.tip.textContent = `${fmtTime(tt)}  $${mid[i].toFixed(pxDigits)}`;
+  const left = Math.min(Math.max(0, x + 12), geom.w - el.tip.offsetWidth - 4);
+  el.tip.style.left = `${left}px`; el.tip.style.top = "8px";
+  if (dragging) seek(tt);
+});
+el.cursor.addEventListener("pointerup", () => { dragging = false; });
+el.cursor.addEventListener("pointerleave", () => { el.tip.style.display = "none"; });
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.key === " ") { e.preventDefault(); el.play.click(); }
+  else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    e.preventDefault(); setPlaying(false);
+    seek(t + (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 60 : 10));
+  }
+});
+let resizeTimer = 0;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { layoutChart(); drawCursor(); }, 80); });
+
+// keep the viewer's place across a republish
+function saveState() { /* snapshot is read lazily by the host */ }
+window.claude?.hot?.snapshot?.(() => ({ t }));
+
+function start(saved) {
+  if (saved && typeof saved.t === "number") t = saved.t;
+  layoutChart();
+  render();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { layoutChart(); drawCursor(); });
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>
