@@ -26,6 +26,12 @@ Replaying Nasdaq's complete feed for Wednesday, January 30, 2019 ([full output](
 
 Every order the feed referred to was where the book said it would be, and the book emptied exactly at the close.
 
+**Apple's day, rebuilt from the raw feed**
+
+![AAPL on 2019-01-30](results/AAPL_2019-01-30.png)
+
+The opening and closing crosses are the two volume spikes at 9:30 and 4:00 (black). The spread is widest just after the open and narrows through the day. At 2:00 pm, the time of that afternoon's Federal Reserve announcement, the price jumps, the spread blows out to about 7¢ on average, and volume spikes, all visible straight from the order-level data.
+
 **What the remaining gaps are**
 - **The ~1.3% of executions that weren't first in line** include executions of orders held in the side table, which the priority check can't place in the queue. The side table held 1.1% of orders. Most of those come from stocks trading under $1 whose first order of the day was a stub quote above $1: HMNY (MoviePass), the second most traded stock that day at about 1¢, is an example. That stub put the stock in the cents book, so its sub-penny orders couldn't fit there. Choosing the book type from more than the first order would fix this.
 - **The 131 crossing adds** are kept off the book rather than matched, since Nasdaq had already handled them.
