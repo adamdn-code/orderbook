@@ -210,6 +210,16 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
     last_bb = last_ba = None
     close_price = None
     unexpected_trades = 0
+    off_book = 0  # orders the book can't hold (e.g. $199,999.99 stub quotes); they never trade
+
+    def add(ref: int, side: int, shares: int, price_c: int) -> bool:
+        nonlocal unexpected_trades, off_book
+        try:
+            unexpected_trades += len(book.limit(ref, side, shares, price_c))
+            return True
+        except obfast.OrderBookError:
+            off_book += 1
+            return False
 
     ts_l, typ_l, ref_l, side_l, sh_l, px_l, nref_l = (events.ts, events.type, events.ref, events.side,
                                                       events.shares, events.price, events.new_ref)
@@ -221,8 +231,7 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
         new_price = None
         # --- apply the real event to the real book ---
         if typ == "A":
-            if px % 100 == 0 and side >= 0:
-                unexpected_trades += len(book.limit(ref, side, shares, price_c))
+            if px % 100 == 0 and side >= 0 and add(ref, side, shares, price_c):
                 new_price = price_c
         elif typ in ("E", "C", "X"):
             rem = book.remaining(ref)
@@ -242,8 +251,7 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
             if rem is not None:
                 removed = rem
                 book.cancel(ref)
-                if px % 100 == 0 and side >= 0:
-                    unexpected_trades += len(book.limit(events.new_ref[i], side, shares, price_c))
+                if px % 100 == 0 and side >= 0 and add(events.new_ref[i], side, shares, price_c):
                     new_price = price_c
         elif typ == "Q" and ts > 15 * 3600 * NS and shares > 0:
             close_price = px / 10_000  # closing cross
@@ -278,6 +286,7 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
     fills = pd.DataFrame(mm.fills, columns=["ts_ns", "sign", "price_c", "qty", "wait_ns", "ahead_at_place"])
     timeline = pd.DataFrame(rows)
     summary = summarize(strat, mm, fills, timeline, mids, mark, unexpected_trades)
+    summary["off_book_orders"] = off_book
     return summary, timeline, fills, mids
 
 
@@ -304,7 +313,8 @@ def summarize(strat, mm, fills, timeline, mids, mark, unexpected_trades) -> dict
     pnl_curve = timeline["pnl"].to_numpy() if len(timeline) else np.zeros(1)
     t, m = mids
     if len(fills):
-        idx = np.searchsorted(t, fills["ts_ns"].to_numpy(), side="right") - 1
+        # mid just before the fill's event (that event may itself move the mid against us)
+        idx = np.searchsorted(t, fills["ts_ns"].to_numpy(), side="left") - 1
         mid_at = m[np.clip(idx, 0, len(m) - 1)]
         edge = float(np.average(fills["sign"] * (mid_at * 100 - fills["price_c"]), weights=fills["qty"]))
     else:

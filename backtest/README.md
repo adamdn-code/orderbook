@@ -1,12 +1,13 @@
 # Market-making backtest on the C++ order book
 
-A market-making strategy, written in Python, trading in a simulated market that runs on the C++ order book through `obfast`, a CPython extension module.
+A market-making strategy, written in Python, trading in a simulated market and then on a full day of real Nasdaq order flow for Apple. Both run on the C++ order book through `obfast`, a CPython extension module.
 
 ## Run it
 ```bash
 make -C cpp python                         # build obfast (needs: sudo apt install python3-dev)
 python backtest/run_backtest.py            # 24-setting sweep, ~20 s; writes backtest/results/
 python backtest/bench_bindings.py          # pure-Python book vs C++ book, same orders
+python backtest/real_mm.py ~/itch/AAPL_events.csv   # real-data study (see below for getting the file)
 python -m unittest discover -s backtest -v # binding + backtest tests
 ```
 Needs `numpy`, `pandas` and `matplotlib`.
@@ -30,6 +31,55 @@ Same 300k random orders, driven from a Python loop:
 | C++ via `obfast` | **4.77 M (12.9×)** |
 
 Both books produce identical trades. A randomized test checks this on 20k mixed adds, cancels and modifies, and memory stays flat over millions of calls, so no reference counts leak.
+
+## On real data: market making Apple on 2019-01-30 (`real_mm.py`)
+The simulation above is stylized. This part runs the strategy against the real thing: every Apple order event Nasdaq reported that day (1.67M events, exported with `itch_replay --track AAPL --events`). The book is rebuilt with the C++ book through `obfast`.
+
+**How fills work.** The market maker's quotes are *shadow orders*: they sit in a virtual queue next to the real orders but don't change what anyone else did. Because ITCH names every order, the backtest knows exactly which real orders are ahead of each quote when it's placed. A quote fills when:
+1. the orders ahead of it trade or cancel, and an order behind it then trades at its price (the incoming order would have reached the quote first), or
+2. the market trades through its price, or
+3. a new order on the other side is priced through it.
+
+Placing and cancelling take effect after a latency. Even at zero latency nothing happens mid-sweep, since one incoming order that takes several levels shows up as several executions with the same timestamp. `test_real_mm.py` tests each rule on hand-written event streams.
+
+| Strategy (100 µs latency, 100-share quotes, 9:35–15:55) | PnL | With rebate* | Shares | Edge at fill | Markout 1 s | Markout 60 s |
+|---|---|---|---|---|---|---|
+| Join the best bid and ask | −$6,879 | −$4,742 | 1,068,666 | +0.60¢ | −0.43¢ | −0.87¢ |
+| Join best + inventory skew | −$6,405 | −$4,597 | 903,776 | +0.60¢ | −0.43¢ | −0.79¢ |
+| One cent behind best + skew | −$299 | −$234 | 32,799 | +1.81¢ | +0.21¢ | −0.35¢ |
+
+*Assumes a $0.0020/share rebate for adding liquidity; Nasdaq's actual rate depends on the firm's volume tier.
+
+![PnL and inventory through the day](results/real/day.png)
+
+**What it shows**
+- **Adverse selection beats the spread.** Each fill is on average 0.6¢ better than the mid at that moment. Within a tenth of a second the mid has moved about 1¢ against it (markout −0.38¢), and it keeps drifting the wrong way over the next minute. The orders that trade with a resting quote are disproportionately the ones that know where the price is going, so quoting at the best price all day loses money steadily even before inventory risk.
+- **Inventory skew halves inventory swings but doesn't fix the problem.** Max inventory falls from ±1,097 to ±507 shares and drawdown shrinks, but the loss per share is about the same, because the losses come from adverse selection, not from holding inventory.
+- **Standing one cent back is safer but barely trades** (420 fills), and with so few fills its markouts are noisy.
+
+![Markouts](results/real/markouts.png)
+
+**Latency is money.** The same skewed strategy, varying only how long a place or cancel takes:
+
+| Latency | 0 | 100 µs | 1 ms | 10 ms | 100 ms |
+|---|---|---|---|---|---|
+| PnL with rebate | −$2,745 | −$4,597 | −$7,059 | −$8,711 | −$10,892 |
+| Edge at fill | +0.87¢ | +0.60¢ | +0.34¢ | +0.22¢ | +0.10¢ |
+| Markout 1 s | −0.29¢ | −0.43¢ | −0.55¢ | −0.68¢ | −0.82¢ |
+
+Every step slower makes things worse, because a slow cancel leaves a stale quote out for faster traders to hit. That's why market makers spend so much on speed. Even at zero latency a naive strategy loses: profitable market making needs a signal for when *not* to quote (the next thing to try here: pull quotes when the book imbalance or recent trades point against them).
+
+![Latency](results/real/latency.png)
+
+**Limitations**
+- Shadow orders have no market impact. In reality the market maker's 100 shares would have taken some fills from other orders and could have changed what others did, so fill counts are on the high side.
+- One stock, one day. The rebate is an assumption. Inventory left at 15:55 is marked at the closing auction price.
+- Fills at the open and close auctions and hidden-order executions aren't modeled.
+
+```bash
+./cpp/build/itch_replay ~/itch/01302019.NASDAQ_ITCH50.gz --symbols AAPL --track AAPL --events --out ~/itch
+python backtest/real_mm.py ~/itch/AAPL_events.csv     # ~1 min; writes backtest/results/real/
+```
 
 ## The market (`sim.py`)
 - A hidden **fundamental** price follows a random walk with occasional **news jumps**.
