@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-OPEN, CLOSE = 9.5, 16.0  # regular session, hours after midnight ET
+OPEN, CLOSE = 9.5, 16.0 + 1 / 60  # regular session (+1 min so the closing cross shows), hours after midnight ET
 
 
 def load(directory: Path, symbol: str):
@@ -58,12 +58,22 @@ def main() -> None:
     if len(crosses):
         px.scatter(crosses["hour"], crosses["price"], marker="D", s=40, color="black", zorder=5, label="opening/closing cross")
     px.set_ylabel("price ($)")
-    px.legend(loc="best", markerscale=6)
+    legend = px.legend(loc="best")
+    for handle in getattr(legend, "legend_handles", getattr(legend, "legendHandles", [])):
+        if hasattr(handle, "set_sizes"):
+            handle.set_sizes([25])  # same legend marker size for tiny dots and big diamonds
+            handle.set_alpha(1)
 
     cents = (book["ask"] - book["bid"]) * 100
-    spread.plot(book["hour"], cents, color="#31a354", lw=0.6)
+    span_h = book["hour"].max() - book["hour"].min()
+    bucket = 1 / 60 if span_h > 1 else max(span_h / 120, 1e-9)  # 1-minute buckets for a full day
+    by_bucket = cents.groupby((book["hour"] // bucket) * bucket)
+    spread.fill_between(by_bucket.min().index, by_bucket.min(), by_bucket.max(), color="#a1d99b", alpha=0.6,
+                        step="post", label="min-max")
+    spread.plot(by_bucket.mean().index, by_bucket.mean(), color="#31a354", lw=1, drawstyle="steps-post", label="average")
     spread.set_ylabel("spread (cents)")
-    spread.set_ylim(0, max(1.0, cents.quantile(0.99) * 1.2))
+    spread.set_ylim(0, max(1.0, by_bucket.max().quantile(0.98) * 1.2))
+    spread.legend(loc="upper right", fontsize=8)
 
     span = trades["hour"].max() - trades["hour"].min() if len(trades) else 0.0
     width = 5 / 60 if span > 1 else max(span / 60, 1e-6)  # 5-minute bars, or 60 bars for short files
