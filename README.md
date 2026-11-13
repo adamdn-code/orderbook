@@ -45,7 +45,7 @@ python -m unittest -v        # all tests
 ![AAPL on 2019-01-30, rebuilt from Nasdaq ITCH](cpp/itch/results/AAPL_2019-01-30.png)
 
 ## Market making on real Nasdaq data
-`backtest/real_mm.py` runs a market maker against all 1.67M of Apple's order events on 2019-01-30, with quotes as shadow orders whose queue position is tracked exactly from the order-level feed. Quoting at the best bid and ask all day **loses money**. Fills average 0.6¢ better than the mid, but within 0.1 s the mid has moved about 1¢ against them (adverse selection). Every step slower, from 0 to 100 ms, loses more: −$2.7k to −$10.9k for the day. See `backtest/README.md`.
+`backtest/real_mm.py` runs a market maker against all 1.67M of Apple's order events on 2019-01-30, with quotes as shadow orders whose queue position is tracked exactly from the order-level feed. Quoting at the best bid and ask all day **loses money**. Fills average 0.6¢ better than the mid, but within 0.1 s the mid has moved about 1¢ against them (adverse selection). Every step slower, from 0 to 100 ms, loses more: −$2.7k to −$10.9k for the day. Pulling quotes when the book is lopsided cuts the loss by about 70%, but by trading less, not by trading better. See `backtest/README.md`.
 
 ![Markouts on real AAPL fills](backtest/results/real/markouts.png)
 

@@ -67,9 +67,36 @@ Placing and cancelling take effect after a latency. Even at zero latency nothing
 | Edge at fill | +0.87¢ | +0.60¢ | +0.34¢ | +0.22¢ | +0.10¢ |
 | Markout 1 s | −0.29¢ | −0.43¢ | −0.55¢ | −0.68¢ | −0.82¢ |
 
-Every step slower makes things worse, because a slow cancel leaves a stale quote out for faster traders to hit. That's why market makers spend so much on speed. Even at zero latency a naive strategy loses: profitable market making needs a signal for when *not* to quote (the next thing to try here: pull quotes when the book imbalance or recent trades point against them).
+Every step slower makes things worse, because a slow cancel leaves a stale quote out for faster traders to hit. That's why market makers spend so much on speed.
 
 ![Latency](results/real/latency.png)
+
+**Trying signals: when *not* to quote.** Two signals were added to the skewed strategy, both re-checked on every book event:
+- *Imbalance:* with `imb = (bid size − ask size) / (bid size + ask size)` at the top of the book, pull the bid when `imb < −threshold` and the ask when `imb > threshold`. A thin side tends to be the next one to get eaten.
+- *Thin level:* pull a quote when its price level has fewer than N real shares on it.
+
+| Variant (100 µs, with rebate) | PnL | Shares | PnL per 100 shares | Markout 1 s |
+|---|---|---|---|---|
+| Skew, no signal | −$4,597 | 903,776 | −$0.51 | −0.43¢ |
+| + imbalance, threshold 0.2 | −$1,470 | 249,562 | −$0.59 | −0.41¢ |
+| + thin level, < 200 shares | −$2,059 | 278,040 | −$0.74 | −0.50¢ |
+
+| Imbalance threshold | 0 (off) | 0.2 | 0.4 | 0.6 | 0.8 |
+|---|---|---|---|---|---|
+| PnL with rebate | −$4,597 | −$1,470 | −$1,739 | −$2,546 | −$3,083 |
+| Shares | 904k | 250k | 342k | 466k | 630k |
+
+Both signals cut the day's loss by 55–70%, but **neither made it profitable, and neither improved the fills**: the loss per share and the markouts stay the same or get worse. The signals help by trading less, not by picking better trades. Pulling harder (a thin-level cutoff of 800 shares) gets the loss to about −$170, but only by barely trading (28k shares).
+
+**Where the losses come from.** Splitting the skewed strategy's fills by how many real shares were ahead of the quote when it was placed (`results/real/queue.csv`):
+
+| Shares ahead at placement | 0 (alone) | 1–100 | 101–300 | 301–600 | 601–1500 | >1500 |
+|---|---|---|---|---|---|---|
+| Shares filled | 155k | 225k | 228k | 109k | 175k | 13k |
+| Markout 0.1 s | −0.73¢ | −0.33¢ | −0.34¢ | −0.35¢ | −0.25¢ | −0.57¢ |
+| Median wait to fill | 1 ms | 0.37 s | 0.57 s | 0.72 s | 0.80 s | 0.85 s |
+
+The worst fills, at twice the loss of the others, are quotes that landed *alone*: they arrived after their level had already emptied and were filled within a millisecond by the same move that cleared it. That's latency again. The quote is stale on arrival. Fixing it needs either a faster reaction (see the latency table) or a short-horizon price prediction good enough to stay out of the way, which top-of-book signals alone don't give.
 
 **Limitations**
 - Shadow orders have no market impact. In reality the market maker's 100 shares would have taken some fills from other orders and could have changed what others did, so fill counts are on the high side.

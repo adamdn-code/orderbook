@@ -32,6 +32,33 @@ def book_setup(t0=T):
     ]
 
 
+class Signals(unittest.TestCase):
+    def quoted_sides(self, strat, rows):
+        _, _, fills, _ = run(stream(*rows), strat)
+        return fills
+
+    def test_imbalance_pulls_the_threatened_side(self):
+        # Bids 900 shares vs asks 100: imbalance +0.8 -> the ask is pulled, the bid stays.
+        rows = [(T, "A", 1, "B", 900, px(100.00)), (T + 1, "A", 2, "S", 100, px(100.02)),
+                (T + 5, "A", 3, "S", 300, px(100.02)),          # joins behind any ask we had
+                (T + 10, "E", 2, "S", 100, px(100.02)),
+                (T + 11, "E", 3, "S", 50, px(100.02))]          # would fill a resting ask
+        on = Strategy("imb", size=100, max_inventory=10_000, rebate_per_share=0.0, imbalance_pull=0.5)
+        off = Strategy("plain", size=100, max_inventory=10_000, rebate_per_share=0.0)
+        self.assertTrue((run(stream(*rows), off)[2]["sign"] == -1).any())
+        self.assertFalse((run(stream(*rows), on)[2]["sign"] == -1).any())
+
+    def test_thin_level_pulls_quote(self):
+        rows = [(T, "A", 1, "B", 100, px(100.00)), (T + 1, "A", 2, "S", 1000, px(100.02)),
+                (T + 5, "A", 3, "B", 50, px(100.00)),
+                (T + 10, "E", 1, "B", 100, px(100.00)),
+                (T + 11, "E", 3, "B", 50, px(100.00))]          # would fill a resting bid
+        thin = Strategy("thin", size=100, max_inventory=10_000, rebate_per_share=0.0, min_level_shares=500)
+        plain = Strategy("plain", size=100, max_inventory=10_000, rebate_per_share=0.0)
+        self.assertTrue((run(stream(*rows), plain)[2]["sign"] == 1).any())
+        self.assertFalse((run(stream(*rows), thin)[2]["sign"] == 1).any())
+
+
 class FillRules(unittest.TestCase):
     STRAT = Strategy("test", size=100, max_inventory=10_000, rebate_per_share=0.0)
 

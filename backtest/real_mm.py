@@ -55,6 +55,14 @@ class Strategy:
     max_inventory: int = 1_000
     latency_ns: int = 0  # time for a place or cancel to take effect
     rebate_per_share: float = 0.0020  # dollars for each share filled as the passive side (assumed)
+    # Signal: top-of-book imbalance I = (bid size - ask size) / (bid size + ask size), in [-1, 1].
+    # Strongly positive means buyers are stacked up and the price tends to tick up next, so a resting
+    # ask is about to be picked off: pull it while I > threshold (and the bid while I < -threshold).
+    imbalance_pull: float = 0.0  # 0 = off
+    # Signal: a best level with few shares left is about to break, and a quote at the back of it
+    # would fill just before the price moves through. Pull our quote there while the real size
+    # at that best price is below this many shares.
+    min_level_shares: int = 0  # 0 = off
 
 
 @dataclass
@@ -150,20 +158,30 @@ class ShadowMaker:
             q.ahead[ref] = left
 
     # ---------- quoting ----------
-    def targets(self, best_bid: int | None, best_ask: int | None, ts: int) -> dict[int, int | None]:
+    def targets(self, book: "obfast.Book", ts: int) -> dict[int, int | None]:
+        best_bid, best_ask = book.best_bid(), book.best_ask()
         if not (QUOTE_START <= ts < QUOTE_END) or best_bid is None or best_ask is None:
             return {BUY: None, SELL: None}
         s, inv = self.s, self.inventory
+        pull_bid = pull_ask = False
+        if s.imbalance_pull or s.min_level_shares:
+            bq, aq = book.depth(BUY, 1)[0][1], book.depth(SELL, 1)[0][1]
+            if s.imbalance_pull:
+                imb = (bq - aq) / (bq + aq)
+                pull_bid, pull_ask = imb < -s.imbalance_pull, imb > s.imbalance_pull
+            if s.min_level_shares:
+                pull_bid = pull_bid or bq < s.min_level_shares
+                pull_ask = pull_ask or aq < s.min_level_shares
         skew = (abs(inv) // s.skew_step) if s.skew_step else 0
         bid = best_bid - s.back_ticks - (skew if inv > 0 else 0)
         ask = best_ask + s.back_ticks + (skew if inv < 0 else 0)
         return {
-            BUY: bid if inv + s.size <= s.max_inventory else None,
-            SELL: ask if inv - s.size >= -s.max_inventory else None,
+            BUY: bid if inv + s.size <= s.max_inventory and not pull_bid else None,
+            SELL: ask if inv - s.size >= -s.max_inventory and not pull_ask else None,
         }
 
     def requote(self, book: "obfast.Book", ts: int) -> None:
-        want = self.targets(book.best_bid(), book.best_ask(), ts)
+        want = self.targets(book, ts)
         for side in (BUY, SELL):
             q = self.quotes[side]
             target = want[side]
@@ -272,8 +290,8 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
                 mid_t.append(ts)
                 mid_v.append((bb + ba) / 2)
             mm.requote(book, ts)
-        elif mm.quotes[BUY] is None or mm.quotes[SELL] is None:
-            mm.requote(book, ts)
+        elif strat.imbalance_pull or strat.min_level_shares or mm.quotes[BUY] is None or mm.quotes[SELL] is None:
+            mm.requote(book, ts)  # the signal can change without the best prices changing
         if ts >= next_record and mid_v:
             next_record = (ts // record_every_ns + 1) * record_every_ns
             if QUOTE_START <= ts <= QUOTE_END + 5 * 60 * NS:
@@ -345,7 +363,27 @@ STRATEGIES = [
     Strategy("Join best", back_ticks=0),
     Strategy("Join best + inventory skew", back_ticks=0, skew_step=200),
     Strategy("One cent behind + skew", back_ticks=1, skew_step=200),
+    Strategy("Skew + imbalance signal", skew_step=200, imbalance_pull=0.2),
+    Strategy("Skew + thin-level signal", skew_step=200, min_level_shares=200),
 ]
+QUEUE_BINS = [-1, 0, 100, 300, 600, 1500, 10**12]
+QUEUE_LABELS = ["0 (alone)", "1-100", "101-300", "301-600", "601-1500", ">1500"]
+
+
+def queue_breakdown(fills: pd.DataFrame, mids) -> pd.DataFrame:
+    """Fill quality by how many real shares were ahead of the quote when it was placed."""
+    t, m = mids
+    out = fills.copy()
+    for h in (0.1, 1, 10):
+        idx = np.searchsorted(t, out["ts_ns"].to_numpy() + int(h * NS), side="right") - 1
+        out[f"mk_{h:g}s"] = out["sign"].to_numpy() * (m[np.clip(idx, 0, len(m) - 1)] * 100 - out["price_c"].to_numpy())
+    out["shares_ahead"] = pd.cut(out["ahead_at_place"], bins=QUEUE_BINS, labels=QUEUE_LABELS)
+    rows = []
+    for label, d in out.groupby("shares_ahead", observed=True):
+        rows.append({"shares_ahead_at_placement": label, "fills": len(d), "shares": int(d["qty"].sum()),
+                     **{f"markout_{h}_cents": float(np.average(d[f"mk_{h}"], weights=d["qty"])) for h in ("0.1s", "1s", "10s")},
+                     "median_wait_s": float(d["wait_ns"].median() / NS)})
+    return pd.DataFrame(rows)
 LATENCIES_US = [0, 100, 1_000, 10_000, 100_000]
 
 
@@ -391,15 +429,19 @@ def main() -> None:
               f"markout 1s {summary['markout_1s_cents']:+.2f}c")
 
     df = pd.DataFrame(results)
+    df["pnl_per_100_shares"] = df["pnl_with_rebate"] / df["shares"].clip(lower=1) * 100
     lat = pd.DataFrame(lat_rows)
     df.to_csv(out / "strategies.csv", index=False, float_format="%.4g")
+    qb = queue_breakdown(fills_by[STRATEGIES[1].name], mids)
+    qb.to_csv(out / "queue.csv", index=False, float_format="%.4g")
+    print(qb.round(3).to_string(index=False))
     lat.to_csv(out / "latency.csv", index=False, float_format="%.4g")
     charts(plt, out, df, lat, timelines, fills_by, mids)
-    print(f"Wrote {out}/strategies.csv, latency.csv, day.png, markouts.png, latency.png")
+    print(f"Wrote {out}/strategies.csv, latency.csv, queue.csv, day.png, markouts.png, latency.png")
 
 
 def charts(plt, out: Path, df, lat, timelines, fills_by, mids) -> None:
-    colors = ["#c0392b", "#1f6f8b", "#7d5ba6"]
+    colors = ["#c0392b", "#1f6f8b", "#7d5ba6", "#2e8b57", "#b8860b"]
     hours = lambda ns: ns / NS / 3600  # noqa: E731
 
     fig, (a, b, c) = plt.subplots(3, 1, figsize=(11, 8.5), sharex=True, gridspec_kw={"height_ratios": [2, 1.2, 1]})
