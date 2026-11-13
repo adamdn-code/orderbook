@@ -98,6 +98,11 @@ public:
     // Id of the order first in line at the best price on this side.
     std::optional<OrderId> front(Side side) const;
 
+    // Every resting order: bids best price first, then asks best price first,
+    // each price level oldest first. Re-adding them in this order rebuilds the
+    // same queues.
+    std::vector<Order> orders() const;
+
     // Pointer into the pool; valid until the next change to the book.
     const Order* get(OrderId id) const;
     std::size_t size() const { return index_.size(); }

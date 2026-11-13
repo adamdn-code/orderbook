@@ -247,19 +247,71 @@ static void orders_the_book_cant_hold_still_apply() {
     Writer w;
     w.directory(1, "X");
     w.add(1, "X", 1, 1, true, 100, usd(20.00));
-    w.add(1, "X", 2, 2, true, 100, 200'050);           // $20.005: sub-penny in a cents book
-    w.add(1, "X", 3, 3, false, 100, usd(50'000.00));   // far outside the flat array
-    w.add(1, "X", 4, 4, false, 100, usd(19.00));       // would cross the $20 bid
-    w.executed(1, 5, 2, 100);
+    w.add(1, "X", 2, 3, false, 100, usd(50'000.00));  // far outside the flat array
+    w.add(1, "X", 3, 4, false, 100, usd(19.00));      // would cross the $20 bid
     w.cancel(1, 6, 3, 30);
     w.del(1, 7, 4);
     w.save(tmp("side.itch"), false);
     Replayer r = replay_file(tmp("side.itch"));
     const Counts t = r.totals();
-    CHECK(t.side_table_adds == 3);
+    CHECK(t.side_table_adds == 2);
     CHECK(t.crossing_adds == 1);
+    CHECK(t.switched_books == 0);
     CHECK(t.missing_refs == 0);
     CHECK(r.live_orders() == 2);  // order 1, and order 3 with 70 shares
+}
+
+// A stock trading around 1 cent whose first order is a stub quote at $5:
+// it starts in the cents book and must move to the tick book, keeping queues.
+static void sub_penny_order_switches_book_and_keeps_queues() {
+    Writer w;
+    w.directory(1, "HMNY");
+    w.add(1, "HMNY", 1, 1, false, 100, usd(5.00));    // stub ask -> cents book
+    w.add(1, "HMNY", 2, 2, true, 1000, usd(0.01));    // whole cent: fits the cents book
+    w.add(1, "HMNY", 3, 3, true, 1000, usd(0.01));
+    w.add(1, "HMNY", 4, 4, true, 5000, 111);          // $0.0111: sub-penny -> switch
+    w.add(1, "HMNY", 5, 5, false, 5000, 115);         // $0.0115
+    w.add(1, "HMNY", 6, 6, true, 2000, 111);
+    w.executed(1, 7, 4, 5000);                        // best bid $0.0111, first in line: order 4
+    w.executed(1, 8, 6, 500);                         // then order 6
+    w.executed(1, 9, 5, 100);                         // best ask $0.0115
+    w.del(1, 10, 6);
+    w.executed(1, 11, 2, 1000);                       // $0.01 level: order 2 was first, before the switch
+    w.executed(1, 12, 3, 1000);
+    w.save(tmp("hmny.itch"), false);
+    Replayer r = replay_file(tmp("hmny.itch"));
+    const Counts t = r.totals();
+    CHECK(t.switched_books == 1);
+    CHECK(t.side_table_adds == 0);
+    CHECK(t.missing_refs == 0);
+    CHECK(t.executions == 5);
+    CHECK(t.executions_front == 5);
+    CHECK(t.executions_best == 5);
+    auto [bid, ask] = r.top_of_book("HMNY");
+    CHECK(!bid && ask == 115);
+}
+
+static void depth_csv_has_levels() {
+    Writer w;
+    w.directory(1, "D");
+    w.add(1, "D", 1'000'000'000, 1, true, 100, usd(10.00));
+    w.add(1, "D", 1'000'000'001, 2, true, 200, usd(9.99));
+    w.add(1, "D", 1'000'000'002, 3, false, 300, usd(10.02));
+    w.add(1, "D", 2'000'000'000, 4, true, 50, usd(10.00));
+    w.save(tmp("depth.itch"), false);
+    ReplayOptions opts;
+    opts.track = "D";
+    opts.out_dir = "build";
+    opts.depth = 3;
+    { Replayer r = replay_file(tmp("depth.itch"), opts); }
+    std::ifstream f("build/D_book.csv");
+    std::string header, row1, row2;
+    std::getline(f, header);
+    std::getline(f, row1);
+    std::getline(f, row2);
+    CHECK(header == "ts_ns,bid,bid_qty,ask,ask_qty,bid2,bid_qty2,ask2,ask_qty2,bid3,bid_qty3,ask3,ask_qty3");
+    CHECK(row1 == "1000000000,10.0000,100,0.0000,0,0.0000,0,0.0000,0,0.0000,0,0.0000,0");
+    CHECK(row2 == "2000000000,10.0000,150,10.0200,300,9.9900,200,0.0000,0,0.0000,0,0.0000,0");
 }
 
 static void unknown_orders_and_over_executions_are_counted() {
@@ -443,6 +495,8 @@ int main() {
         {"replace_goes_to_back_of_queue", replace_goes_to_back_of_queue},
         {"sub_dollar_stock_uses_tick_book", sub_dollar_stock_uses_tick_book},
         {"orders_the_book_cant_hold_still_apply", orders_the_book_cant_hold_still_apply},
+        {"sub_penny_order_switches_book_and_keeps_queues", sub_penny_order_switches_book_and_keeps_queues},
+        {"depth_csv_has_levels", depth_csv_has_levels},
         {"unknown_orders_and_over_executions_are_counted", unknown_orders_and_over_executions_are_counted},
         {"gzip_and_plain_files_match_and_truncation_is_reported", gzip_and_plain_files_match_and_truncation_is_reported},
         {"malformed_length_is_counted", malformed_length_is_counted},

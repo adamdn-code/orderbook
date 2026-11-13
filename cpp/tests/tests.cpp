@@ -275,9 +275,14 @@ static void matches_reference_book() {
                  a[i].qty == b[i].qty && a[i].aggressor == b[i].aggressor;
         ok = ok && fast.best_bid() == slow.best_bid() && fast.best_ask() == slow.best_ask() &&
              fast.size() == slow.size();
-        if (step % 1000 == 0)
+        if (step % 1000 == 0) {
             ok = ok && fast.resting_qty() == slow.resting_qty() && fast.depth(B, 10) == slow.depth(B, 10) &&
                  fast.depth(S, 10) == slow.depth(S, 10);
+            const auto fo = fast.orders(), so = slow.orders();
+            ok = ok && fo.size() == so.size();
+            for (std::size_t i = 0; ok && i < fo.size(); ++i)
+                ok = fo[i].id == so[i].id && fo[i].remaining == so[i].remaining && fo[i].price == so[i].price;
+        }
         if (!ok) {
             ++mismatches;
             std::printf("  mismatch at step %d\n", step);

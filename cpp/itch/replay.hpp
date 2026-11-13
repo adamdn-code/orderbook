@@ -14,9 +14,12 @@
 // Book choice per stock: prices of $1 and up are in whole cents (Reg NMS
 // forbids sub-penny quotes there), so those stocks use the fast flat-array
 // book in cents. Stocks whose first order is under $1 use the map-based book
-// in raw 1/10,000-dollar ticks. Any order a book can't hold (a sub-penny price
-// in a cents book, or a price far outside the flat array) is kept in a side
-// table so its later executions and cancels still apply; these are counted.
+// in raw 1/10,000-dollar ticks. If a stock in the cents book later gets a
+// sub-penny order (it trades under $1 but its first order was a stub quote
+// above $1), its book is rebuilt as a tick book, keeping every queue in order.
+// Any order a book still can't hold (e.g. a price far outside the flat array)
+// is kept in a side table so its later executions and cancels still apply;
+// these are counted.
 #pragma once
 
 #include "orderbook.hpp"
@@ -38,7 +41,8 @@ struct ReplayOptions {
     std::unordered_set<std::string> symbols;  // empty = every symbol
     std::string track;                        // symbol to write CSVs for ("" = none)
     std::string out_dir = ".";
-    std::uint64_t sample_ns = 1'000'000'000;  // top-of-book sample interval for the tracked symbol
+    std::uint64_t sample_ns = 1'000'000'000;  // book sample interval for the tracked symbol
+    int depth = 1;                            // price levels per side to record for the tracked symbol
 };
 
 struct Counts {
@@ -58,6 +62,7 @@ struct Counts {
     std::uint64_t over_executions = 0;   // executed/cancelled more shares than the order had
     std::uint64_t crossing_adds = 0;     // add would have crossed our book
     std::uint64_t side_table_adds = 0;   // add kept off the main book (see header comment)
+    std::uint64_t switched_books = 0;    // stocks moved from the cents book to the tick book
 
     void merge(const Counts& o);
 };
@@ -128,10 +133,15 @@ private:
     Stock* stock(std::uint16_t locate);
     void place(Stock& s, std::uint64_t ref, bool buy, std::uint32_t shares, std::uint32_t price);
     bool remove(Stock& s, std::uint64_t ref);  // whole order; false if unknown
+    void switch_to_ticks(Stock& s);
+    // Adds to the stock's book unless it would cross or doesn't fit. True if added.
+    template <class Book>
+    bool try_add(Stock& s, Book& book, std::uint64_t ref, bool buy, std::int64_t shares, std::int64_t price);
     // Removes `shares` from an order (execution or cancel). Returns false if the order is unknown.
     bool reduce(Stock& s, std::uint64_t ref, std::int64_t shares);
     void record_trade(Stock& s, std::uint64_t ts, char kind, std::uint64_t shares, std::uint32_t price);
-    void after(Stock& s, std::uint64_t ts);  // writes a top-of-book sample when one is due
+    void after(Stock& s, std::uint64_t ts);  // writes a book sample when one is due
+    void write_depth(Stock& s, std::uint64_t ts);
     void open_tracking(Stock& s);
 
     ReplayOptions opts_;

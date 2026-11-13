@@ -6,6 +6,7 @@
 #include "itch.hpp"
 #include "replay.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -16,11 +17,12 @@ namespace {
 
 void usage() {
     std::fprintf(stderr,
-                 "usage: itch_replay FILE [--symbols A,B,..] [--track SYM] [--out DIR] [--sample-ms N]\n"
+                 "usage: itch_replay FILE [--symbols A,B,..] [--track SYM] [--out DIR] [--sample-ms N] [--depth N]\n"
                  "  --symbols   only rebuild these symbols (default: all)\n"
                  "  --track     write SYM_book.csv (top of book) and SYM_trades.csv to --out\n"
                  "  --out       directory for CSV output (default: .)\n"
-                 "  --sample-ms top-of-book sample interval for --track (default: 1000)\n");
+                 "  --sample-ms book sample interval for --track (default: 1000)\n"
+                 "  --depth     price levels per side to record for --track (default: 1)\n");
 }
 
 double pct(std::uint64_t part, std::uint64_t whole) { return whole ? 100.0 * double(part) / double(whole) : 0.0; }
@@ -53,6 +55,8 @@ int main(int argc, char** argv) {
             opts.out_dir = next();
         } else if (a == "--sample-ms") {
             opts.sample_ns = std::stoull(next()) * 1'000'000ULL;
+        } else if (a == "--depth") {
+            opts.depth = std::max(1, std::stoi(next()));
         } else if (a == "-h" || a == "--help") {
             usage();
             return 0;
@@ -115,6 +119,7 @@ int main(int argc, char** argv) {
                     (unsigned long long)t.crossing_adds, (unsigned long long)t.adds, pct(t.crossing_adds, t.adds));
         std::printf("  orders kept off the main book (side table):     %llu (%.4f%%)\n",
                     (unsigned long long)t.side_table_adds, pct(t.side_table_adds, t.adds));
+        std::printf("  stocks switched to the sub-penny book:          %llu\n", (unsigned long long)t.switched_books);
         std::printf("  executions at our best price:                   %.3f%%\n", pct(t.executions_best, t.executions));
         std::printf("  executions hitting our first order in line:     %.3f%%\n", pct(t.executions_front, t.executions));
 

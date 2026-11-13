@@ -39,6 +39,7 @@ void Counts::merge(const Counts& o) {
     over_executions += o.over_executions;
     crossing_adds += o.crossing_adds;
     side_table_adds += o.side_table_adds;
+    switched_books += o.switched_books;
 }
 
 Replayer::Replayer(ReplayOptions options) : opts_(std::move(options)), stocks_(65536) {}
@@ -224,6 +225,22 @@ void Replayer::on_cross(std::uint16_t locate, std::uint64_t ts, std::uint64_t sh
 
 // ---------- book operations ----------
 
+template <class Book>
+bool Replayer::try_add(Stock& s, Book& book, std::uint64_t ref, bool buy, std::int64_t shares, std::int64_t p) {
+    const auto bid = book.best_bid(), ask = book.best_ask();
+    if (buy ? (ask && p >= *ask) : (bid && p <= *bid)) {
+        ++s.counts.crossing_adds;  // Nasdaq's book shouldn't cross; keep it out of ours
+        return false;
+    }
+    s.scratch.clear();
+    try {
+        book.add(ob::Order::limit(ref, buy ? ob::Side::Buy : ob::Side::Sell, shares, p), s.scratch);
+    } catch (const ob::OrderBookError&) {  // e.g. price far outside the flat array
+        return false;
+    }
+    return true;
+}
+
 void Replayer::place(Stock& s, std::uint64_t ref, bool buy, std::uint32_t shares, std::uint32_t price) {
     if (!s.cents && !s.ticks) {
         if (price >= kCentsThreshold) {
@@ -234,28 +251,41 @@ void Replayer::place(Stock& s, std::uint64_t ref, bool buy, std::uint32_t shares
             s.ticks->keep_history(false);
         }
     }
-    const ob::Side side = buy ? ob::Side::Buy : ob::Side::Sell;
-    const bool placed = with_book(s, false, [&](auto& book, std::int64_t unit) {
-        if (price % unit != 0) return false;  // sub-penny price in a cents book
-        const ob::Price p = ob::Price(price / unit);
-        const auto bid = book.best_bid(), ask = book.best_ask();
-        if (buy ? (ask && p >= *ask) : (bid && p <= *bid)) {
-            ++s.counts.crossing_adds;  // Nasdaq's book shouldn't cross; keep it out of ours
-            return false;
-        }
-        s.scratch.clear();
-        try {
-            book.add(ob::Order::limit(ref, side, shares, p), s.scratch);
-        } catch (const ob::OrderBookError&) {  // e.g. price far outside the flat array
-            return false;
-        }
-        return true;
-    });
+    if (s.cents && price % 100 != 0) switch_to_ticks(s);  // a sub-penny price: this stock trades under $1
+    const bool placed = s.cents ? try_add(s, *s.cents, ref, buy, shares, price / 100)
+                                : try_add(s, *s.ticks, ref, buy, shares, price);
     if (!placed) {
         s.side_table[ref] = SideOrder{buy, price, std::int64_t(shares)};
         ++s.counts.side_table_adds;
     }
     peak_live_ = std::max(peak_live_, ++live_);
+}
+
+void Replayer::switch_to_ticks(Stock& s) {
+    auto ticks = std::make_unique<ref::OrderBook>();
+    ticks->keep_history(false);
+    // Re-adding in priority order (each level oldest first) rebuilds the same queues.
+    for (const ob::Order& o : s.cents->orders()) {
+        s.scratch.clear();
+        ticks->add(ob::Order::limit(o.id, o.side, o.remaining, o.price * 100), s.scratch);
+    }
+    s.cents.reset();
+    s.ticks = std::move(ticks);
+    ++s.counts.switched_books;
+    // Side-table orders that the cents book couldn't hold may fit now (at the back of their queues).
+    for (auto it = s.side_table.begin(); it != s.side_table.end();) {
+        const SideOrder& o = it->second;
+        const auto bid = s.ticks->best_bid(), ask = s.ticks->best_ask();
+        const std::int64_t p = o.price;
+        const bool crosses = o.buy ? (ask && p >= *ask) : (bid && p <= *bid);
+        if (!crosses) {
+            s.scratch.clear();
+            s.ticks->add(ob::Order::limit(it->first, o.buy ? ob::Side::Buy : ob::Side::Sell, o.shares, p), s.scratch);
+            it = s.side_table.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 bool Replayer::reduce(Stock& s, std::uint64_t ref, std::int64_t shares) {
@@ -309,6 +339,10 @@ void Replayer::record_trade(Stock& s, std::uint64_t ts, char kind, std::uint64_t
 void Replayer::after(Stock& s, std::uint64_t ts) {
     if (!s.book_csv || ts < s.next_sample) return;
     s.next_sample = (ts / opts_.sample_ns + 1) * opts_.sample_ns;
+    if (opts_.depth > 1) {
+        write_depth(s, ts);
+        return;
+    }
     struct Top {
         double bid = 0, ask = 0;
         long long bid_qty = 0, ask_qty = 0;
@@ -329,13 +363,37 @@ void Replayer::after(Stock& s, std::uint64_t ts) {
     std::fprintf(s.book_csv, "%llu,%.4f,%lld,%.4f,%lld\n", (unsigned long long)ts, t.bid, t.bid_qty, t.ask, t.ask_qty);
 }
 
+void Replayer::write_depth(Stock& s, std::uint64_t ts) {
+    const std::size_t n = std::size_t(opts_.depth);
+    std::vector<std::pair<ob::Price, ob::Qty>> bids, asks;
+    std::int64_t unit = 1;
+    with_book(s, 0, [&](auto& book, std::int64_t u) {
+        bids = book.depth(ob::Side::Buy, n);
+        asks = book.depth(ob::Side::Sell, n);
+        unit = u;
+        return 0;
+    });
+    std::fprintf(s.book_csv, "%llu", (unsigned long long)ts);
+    // Level 1 first (same columns as without --depth), then levels 2..n.
+    for (std::size_t i = 0; i < n; ++i) {
+        const double bp = i < bids.size() ? double(bids[i].first * unit) / 10'000.0 : 0.0;
+        const long long bq = i < bids.size() ? (long long)bids[i].second : 0;
+        const double ap = i < asks.size() ? double(asks[i].first * unit) / 10'000.0 : 0.0;
+        const long long aq = i < asks.size() ? (long long)asks[i].second : 0;
+        std::fprintf(s.book_csv, ",%.4f,%lld,%.4f,%lld", bp, bq, ap, aq);
+    }
+    std::fputc('\n', s.book_csv);
+}
+
 void Replayer::open_tracking(Stock& s) {
     if (s.book_csv) return;
     const std::string base = opts_.out_dir + "/" + s.symbol;
     s.book_csv = std::fopen((base + "_book.csv").c_str(), "w");
     s.trades_csv = std::fopen((base + "_trades.csv").c_str(), "w");
     if (!s.book_csv || !s.trades_csv) throw std::runtime_error("can't write CSVs to " + opts_.out_dir);
-    std::fprintf(s.book_csv, "ts_ns,bid,bid_qty,ask,ask_qty\n");
+    std::fprintf(s.book_csv, "ts_ns,bid,bid_qty,ask,ask_qty");
+    for (int i = 2; i <= opts_.depth; ++i) std::fprintf(s.book_csv, ",bid%d,bid_qty%d,ask%d,ask_qty%d", i, i, i, i);
+    std::fputc('\n', s.book_csv);
     std::fprintf(s.trades_csv, "ts_ns,kind,price,shares\n");
 }
 

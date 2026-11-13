@@ -94,6 +94,13 @@ std::vector<std::pair<Price, Qty>> OrderBook::depth(Side side, std::size_t level
     return out;
 }
 
+std::vector<Order> OrderBook::orders() const {
+    std::vector<Order> out;
+    for (const auto& [price, level] : bids_) out.insert(out.end(), level.begin(), level.end());
+    for (const auto& [price, level] : asks_) out.insert(out.end(), level.begin(), level.end());
+    return out;
+}
+
 std::optional<OrderId> OrderBook::front(Side side) const {
     if (side == Side::Buy) {
         if (bids_.empty()) return std::nullopt;

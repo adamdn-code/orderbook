@@ -54,7 +54,7 @@ make -C cpp itch      # needs zlib: sudo apt install zlib1g-dev
 ./cpp/build/itch_replay ~/itch/01302019.NASDAQ_ITCH50.gz --track AAPL --out ~/itch
 python3 cpp/itch/plot_symbol.py AAPL --dir ~/itch     # -> ~/itch/AAPL_day.png
 ```
-Options: `--symbols AAPL,MSFT` rebuilds only those books (faster), `--track SYM` writes that stock's top of book and trades to CSV, and `--sample-ms N` sets how often the top of book is sampled.
+Options: `--symbols AAPL,MSFT` rebuilds only those books (faster), `--track SYM` writes that stock's book and trades to CSV, `--depth N` records N price levels per side instead of just the best, and `--sample-ms N` sets how often the book is sampled.
 
 ## What it checks
 Nasdaq did the matching, so ITCH is a log of its book changing. If the rebuilt book is right:
@@ -67,7 +67,7 @@ The tool reports each of these as a count or percentage. It also reports through
 ## How it works
 - **Reader** (`itch.hpp`) streams the file through zlib in 4 MB chunks and hands each length-prefixed message to the decoder without copying. Fields are big-endian. Prices are fixed point with 4 decimals.
 - **Decoder** handles the message types that change a book: add (`A`/`F`), execute (`E`/`C`), partial cancel (`X`), delete (`D`) and replace (`U`). It also handles hidden-order trades (`P`) and opening/closing crosses (`Q`) for volume. Other types are skipped by length, and any message whose length doesn't match the spec is counted as malformed.
-- **Books.** Stocks at $1 and up use the flat-array book in whole cents (Reg NMS doesn't allow sub-penny quotes there). Stocks that start under $1 use the map-based book in 1/100-cent ticks. Any order a book can't hold, such as a sub-penny price in a cents book or one far outside the flat array's range, goes to a side table so its later executions and cancels still apply, and is counted.
+- **Books.** Stocks at $1 and up use the flat-array book in whole cents (Reg NMS doesn't allow sub-penny quotes there). Stocks that start under $1 use the map-based book in 1/100-cent ticks. If a stock in the cents book gets a sub-penny order, it actually trades under $1 and only its first order was a stub quote, so its book is rebuilt as a tick book, re-adding every order in priority order so each queue stays intact. Any order a book still can't hold, such as one far outside the flat array's range or one that would cross, goes to a side table so its later executions and cancels still apply, and is counted.
 - **Partial cancels and partial executions keep an order's place in line. Replaces send it to the back,** matching Nasdaq's rules.
 
 ## Tests

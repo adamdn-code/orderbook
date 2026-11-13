@@ -182,6 +182,19 @@ std::optional<OrderId> OrderBook::front(Side side) const {
     return pool_[levels_[index_of(best_ask_)].head].order.id;
 }
 
+std::vector<Order> OrderBook::orders() const {
+    std::vector<Order> out;
+    out.reserve(size());
+    auto take_level = [&](std::ptrdiff_t i) {
+        for (std::uint32_t n = levels_[std::size_t(i)].head; n != kNil; n = pool_[n].next) out.push_back(pool_[n].order);
+    };
+    if (has_bid_)
+        for (std::ptrdiff_t i = std::ptrdiff_t(index_of(best_bid_)); i >= 0; i = find_prev(std::size_t(i))) take_level(i);
+    if (has_ask_)
+        for (std::ptrdiff_t i = std::ptrdiff_t(index_of(best_ask_)); i >= 0; i = find_next(std::size_t(i) + 1)) take_level(i);
+    return out;
+}
+
 const Order* OrderBook::get(OrderId id) const {
     const std::uint32_t* slot = index_.find(id);
     return slot ? &pool_[*slot].order : nullptr;
