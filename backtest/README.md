@@ -109,25 +109,38 @@ The worst fills, at twice the loss of the others, are quotes that landed *alone*
 python backtest/real_mm.py ~/itch/AAPL_events.csv     # ~1 min; writes backtest/results/real/
 ```
 
-## An ML signal: predicting the next move from order flow (`ml_signal.py`, `ml_backtest.py`)
+## An ML signal: predicting the next move from order flow
 
-The study above ends on an open problem: quotes get picked off because they're stale, and top-of-book imbalance alone doesn't predict the move well enough to avoid it. So the next step is a model that does, graded two ways: AUC against the imbalance baseline, and then dollars in the backtest.
+The study above ends on an open problem: quotes get picked off because they're stale, and top-of-book imbalance alone doesn't predict the move well enough to avoid it. This section builds models that do, grades them as predictions (AUC against the imbalance baseline), then in dollars in the backtest, then away from the afternoon they were tested on, and finally runs them in C++.
 
 ```bash
-python backtest/ml_signal.py   ~/itch/AAPL_events.csv   # features, labels, training, AUC (~6 min); writes results/ml/
-python backtest/ml_backtest.py ~/itch/AAPL_events.csv   # 104 backtests with the model as a quote filter (~3 min)
+python backtest/ml_signal.py    ~/itch/AAPL_events.csv   # features, labels, models, AUC (~15 min); writes results/ml/
+python backtest/ml_backtest.py  ~/itch/AAPL_events.csv   # toxicity models + 180 tuning-hour and 278 test backtests (~13 min)
+python backtest/ml_spy.py       ~/itch/AAPL_events.csv ~/itch/SPY_events.csv        # SPY lead-lag features
+python backtest/ml_generalize.py stocks ~/itch/{MSFT,INTC,AMZN,NVDA,SPY}_events.csv  # other stocks
+python backtest/ml_generalize.py day2 ~/itch/d2/AAPL_events.csv                      # a second, untouched day
+make -C cpp ml && python backtest/export_model.py && python backtest/export_model.py --check ~/itch/AAPL_events.csv
+python backtest/model_size_tradeoff.py ~/itch/AAPL_events.csv                        # accuracy vs nanoseconds
 ```
-Also needs `scikit-learn`. The second script writes `docs/playground_data.json` for the **[interactive playground](https://adamdn-code.github.io/orderbook/playground.html)**.
+Also needs `scikit-learn`. `ml_backtest.py` writes `docs/playground_data.json` for the **[interactive playground](https://adamdn-code.github.io/orderbook/playground.html)**. Other stocks' event files come from `itch_replay FILE --symbols SYM --track SYM --events`. The second day is Nasdaq's public sample file for 2019-12-30.
 
-**Setup**
-- *Samples:* one per timestamp after all its events are applied (1.44M), so features never see half of a sweep.
-- *Label:* is the next mid-price change up or down? Also checked: up or down 100 ms and 1 s later.
-- *Features (19, all causal):* spread; depth imbalance at 1, 2 and 5 levels; log sizes at the touch; microprice offset; order-flow imbalance (Cont, Kukanov & Stoikov) over 100 ms, 1 s and 10 s; signed trade volume and trade counts over 1 s and 10 s; mid change over 1 s and 10 s; time since the last move and its direction. No time-of-day feature, which would just memorise the morning.
-- *Split:* train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55, 60 s embargo at each boundary, never shuffled. Settings for the gradient-boosted trees (scikit-learn `HistGradientBoostingClassifier`) are picked on the tuning hour, then the model is refit on train + tune and scored on test once.
+### Setup
+- *Samples:* one per timestamp after all its events are applied (1.44M for AAPL), so features never see half of a sweep.
+- *Labels:* is the next mid-price change up or down? Also: up or down 100 ms and 1 s later, and the *latency-aware* labels described below.
+- *Features (19, all causal):*
+  - spread; depth imbalance at 1, 2 and 5 levels; log sizes at the touch; microprice offset
+  - order-flow imbalance (Cont, Kukanov & Stoikov) over 100 ms, 1 s and 10 s
+  - signed trade volume and trade counts over 1 s and 10 s
+  - mid change over 1 s and 10 s; time since the last move and its direction
+  - No time-of-day feature, which would just memorise the morning.
+- *Split:* train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55, with a 60 s embargo at each boundary, never shuffled. Settings for the gradient-boosted trees (scikit-learn `HistGradientBoostingClassifier`) are picked on the tuning hour, then the model is refit on train + tune and scored on test once.
 - *Intervals:* block bootstrap over 1-minute blocks. Consecutive samples share a label, so a row-level bootstrap would be far too narrow.
-- *Leakage tests* (`test_ml.py`): features at time *t* are identical whether the events after *t* are kept, dropped or replaced.
+- *Tests* (`test_ml.py`, 11):
+  - features at time *t* are identical whether the events after *t* are kept, dropped or replaced
+  - each label is checked on hand-written events
+  - the C++ features and probabilities match Python bit for bit
 
-**Test-period AUC** (13:30–15:55, includes the 2 pm Fed announcement)
+### How well it predicts (AAPL, test period 13:30–15:55, includes the 2 pm Fed announcement)
 
 | Label | Imbalance (baseline) | Logistic, all features | Gradient boosting | Gain over baseline, 95% CI |
 |---|---|---|---|---|
@@ -135,27 +148,95 @@ Also needs `scikit-learn`. The second script writes `docs/playground_data.json` 
 | Up/down in 100 ms | 0.638 | 0.642 | **0.683** | +0.045 (+0.034 to +0.052) |
 | Up/down in 1 s | 0.582 | 0.592 | **0.605** | +0.023 (+0.009 to +0.035) |
 
-The model beats the baseline in every half hour of the test period (0.630–0.680 vs 0.590–0.629), and it is calibrated: the top decile predicts 72% up and 73% were. The logistic regression barely beats imbalance, so the gain comes from interactions the trees find, not from just adding features. The most important features are signed trade flow over the last second, the size at the best ask and bid, time since the last move and 100 ms order-flow imbalance.
+- The model beats the baseline in every half hour of the test period.
+- It is calibrated: the top decile predicts 72% up, and 73% were.
+- Logistic regression barely beats imbalance, so the gain comes from interactions the trees find, not just from adding features.
+- Most important features: signed trade flow over the last second, the sizes at the best ask and bid, time since the last move, and 100 ms order-flow imbalance.
 
 ![ROC and feature importance](results/ml/roc_importance.png)
 
-**Does it make money?** The model becomes a quote filter: pull the ask while P(up) > 0.5 + *t*, and the bid while P(up) < 0.5 − *t*. Pulling quotes always means trading less, which earlier looked like an improvement and wasn't. So each signal's thresholds are set so it pulls a quote the same share of the time (10–60%) on the tuning hour, and the comparison is **loss per share** at equal pull rates. Join best + inventory skew, test period only:
+### Training for the latency you have
+A quote you pull at time *t* is only gone at *t* + latency, so a move inside that gap can't be dodged. A latency-aware label asks for the direction of the first mid change *after* the cancel could land. Trained on those labels, the model beats the zero-latency model where the gap is long enough to matter:
 
-| Latency | No filter | Imbalance, pull 50% | Model, pull 50% |
+| Latency | Imbalance | Zero-latency model | Latency-trained model | Gain |
+|---|---|---|---|---|
+| 100 µs | 0.588 | 0.635 | 0.633 | −0.001 |
+| 1 ms | 0.570 | 0.594 | **0.602** | +0.008 |
+| 10 ms | 0.549 | 0.572 | **0.581** | +0.010 |
+
+### Training on the market maker's own fills
+The direction model answers "which way is the next move?". The question that costs money is narrower: "if my bid gets hit now, what is that fill worth a second later?" `ml_toxicity.py` learns that directly.
+- *Data:* the plain market maker's fills from the morning, with features taken at the last moment a cancel could still have beaten each fill.
+- *Features:* the 19 features turned to the fill's point of view (for ask fills every directional feature is negated and the bid/ask sizes swap), so one model serves both sides.
+- *Results:* with only about 5,500 training fills it ranks losing fills better than imbalance on the test afternoon (AUC 0.554 vs 0.506 at zero latency). The fills it rates worst lost 0.53¢/share; the ones it rates best made 0.05¢.
+
+### Does it make money?
+Each model becomes a quote filter. When triggered, it either pulls the threatened quote or steps it back a cent.
+
+Pulling more always means trading less, which earlier looked like an improvement and wasn't. So each filter's thresholds are set so it is active the same share of the time (10–60%) on the tuning hour, and the comparison is **loss per share at matched activity**:
+- The next-move model loses less per share than imbalance in **all 48** matched settings (6 rates × 4 latencies × pull or step back).
+- The latency-trained model wins **34/36**, and the toxicity model **44/48**.
+
+**Picking the rate without peeking.** For the headline numbers, each filter's activity rate was picked as the most profitable on the tuning hour, using models fit on the morning only, and then the test afternoon was run once. (An earlier version of this README quoted +$160 at zero latency. That was the best test-period rate, picked after looking. The honest number is below.) Test afternoon, join best + inventory skew, PnL with rebate:
+
+| Latency | No filter | Imbalance (best of pull/step) | Best ML filter, tuning-hour pick |
 |---|---|---|---|
-| 0 | −$1,147 · −$0.31/100 sh · 1 s markout −0.28¢ | −$841 · −$0.54/100 sh · −0.28¢ | **+$160 · +$0.10/100 sh · −0.14¢** |
-| 100 µs | −$2,086 · −$0.51 · −0.42¢ | −$871 · −$0.48 · −0.39¢ | **−$145 · −$0.08 · −0.33¢** |
-| 1 ms | −$2,792 · −$0.56 · −0.56¢ | −$1,578 · −$0.53 · −0.49¢ | **−$1,154 · −$0.36 · −0.48¢** |
-| 10 ms | −$3,325 · −$0.68 · −0.68¢ | −$2,266 · −$0.71 · −0.65¢ | **−$1,689 · −$0.50 · −0.64¢** |
+| 0 | −$1,147 | −$841 (pull, 50%) | **−$274** (toxicity, step back, 30%) · next move, pull, 20%: −$470 |
+| 100 µs | −$2,086 | −$1,226 (step, 40%) | **−$835** (latency-trained, pull, 30%) |
+| 1 ms | −$2,792 | −$2,113 (step, 20%) | **−$1,041** (latency-trained, step back, 60%) |
+| 10 ms | −$3,325 | −$2,475 (step, 10%) | **−$1,303** (latency-trained, pull, 60%) |
 
-- The model filter loses less per share than imbalance at **all 24** matched settings (6 pull rates × 4 latencies). At 0 latency it turns the afternoon positive at 50–60% pull, and halves the 1 s adverse selection.
-- Imbalance at the same pull rates barely changes loss per share (and sometimes makes it worse). It mostly just trades less, which matches the finding above.
-- **The edge decays with latency:** +$0.43 per 100 shares over imbalance at 0, +$0.28 at 100 µs, +$0.16 at 1 ms, +$0.14 at 10 ms. The prediction is about the next few milliseconds, so it's only worth what you can act on in time.
-- Quoting 1¢ behind trades only 2k–100k shares in the test period, too few for the differences to mean much. The playground shows those runs, but the conclusions above use the join-best runs.
+- Nothing makes money after honest selection, but every ML filter loses much less than quoting blindly or filtering on imbalance.
+- The best ML filter cuts the loss by 60–76% against no filter and 32–67% against imbalance.
+- The latency-trained model matters most when you're slow. At 10 ms it loses −$1,303 against −$2,270 for the zero-latency model.
+- Pull vs. step back has no consistent winner.
+- Quoting 1¢ behind trades too little for conclusions; it's in the playground only.
 
-![Loss per share at matched pull rates](results/ml/filters.png)
+![Loss per share at matched activity, test period](results/ml/filters.png)
 
-**Limitations, on top of the backtest's:** one stock, one test afternoon. The intervals cover noise within that afternoon, not other days, so the next check is a second day held out entirely. The filter's thresholds come from the tuning hour, but the choice of a 50% pull rate for the table is made looking at test results; the playground shows every pull rate so nothing is hidden.
+### Away from this afternoon
+**Other stocks, same day** (each stock's own 13:30–15:55 test period, AUC for the next move):
+
+| Stock | Mean spread | Imbalance | AAPL model, unchanged | Own model, same protocol | Own − imbalance, 95% CI |
+|---|---|---|---|---|---|
+| MSFT | 1.2¢ | 0.699 | 0.684 | **0.734** | +0.030 to +0.039 |
+| INTC | 1.1¢ | 0.676 | 0.590 | **0.710** | +0.026 to +0.041 |
+| SPY | 1.3¢ | 0.688 | 0.667 | **0.700** | +0.010 to +0.016 |
+| NVDA | 4.6¢ | 0.599 | 0.622 | **0.639** | +0.032 to +0.048 |
+| AMZN | 52.7¢ | 0.535 | 0.554 | **0.595** | +0.043 to +0.078 |
+
+- The method generalizes: a model trained the same way beats imbalance on every stock.
+- The fitted AAPL model does not transfer. It's *worse* than imbalance on the one-tick stocks (MSFT, INTC, SPY), where queue sizes behave very differently, and better only on the wider-spread names.
+- Order-flow models are per-instrument, or at least per tick regime.
+
+**A second day** (2019-12-30, with every model, threshold and rate frozen from 2019-01-30): `ml_generalize.py day2` is ready but hasn't been run yet; the results will be added here.
+
+**SPY as a leading signal:** adding nine SPY features to AAPL's model (SPY returns, order flow and depth imbalance as of each AAPL snapshot, plus how far SPY has moved since AAPL last moved) did **not** help: 0.651 vs 0.652 for the next move (difference −0.004 to +0.002), and 0.679 vs 0.683 at 100 ms. The most useful SPY feature was the catch-up one, but its importance was a sixth of AAPL's own top features. At these horizons AAPL's own book already holds what SPY knows.
+
+### In C++, next to the matching engine
+`cpp/ml/` computes the 19 features incrementally (O(1) per update, with forward-only window pointers) and evaluates the exported trees, branch-free and 8 trees at a time. `export_model.py --check` replays the whole AAPL day through it:
+- Features are **bit-identical** to Python's on all 1,441,976 decisions, and probabilities are identical. Python uses the C math library for its two `log` features so this holds exactly.
+- Updating the features costs **~200–270 ns per decision** on top of the book.
+- The tuned model (300 trees, depth up to 25) costs **~7 µs** per prediction. Smaller models trained the same way:
+
+| Model | Test AUC | ns / prediction (C++) |
+|---|---|---|
+| tuned, 300 trees (leaf-wise, depth ≤ 25) | 0.652 | 7,300 |
+| 200 trees, depth 8 | 0.651 | 2,700 |
+| **50 trees, depth 6** | **0.650** | **405** |
+| 25 trees, depth 4 | 0.646 | 185 |
+| 10 trees, depth 4 | 0.642 | 122 |
+| imbalance alone | 0.603 | – |
+
+50 depth-6 trees keep all but 0.001 of the AUC at 1/18th of the cost. Features plus model then add about 0.6–0.7 µs per decision, which is small next to the 100 µs latency tier and comparable to the engine's own 0.3 µs round trip.
+
+![Accuracy vs nanoseconds](results/ml/cpp_tradeoff.png)
+
+### Limitations
+- The backtests are one stock's afternoon. The second day and the other stocks test predictions more broadly.
+- The tuning hour is short, so the activity rate it picks is noisy. That's the cost of not peeking.
+- The toxicity model has only a few thousand training fills.
+- Shadow orders have no market impact, the rebate is assumed, and auction and hidden fills aren't modelled.
 
 ## The market (`sim.py`)
 - A hidden **fundamental** price follows a random walk with occasional **news jumps**.

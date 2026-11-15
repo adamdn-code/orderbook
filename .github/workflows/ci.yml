@@ -48,8 +48,8 @@ jobs:
         run: python -m unittest -v test_orderbook test_engine
       - name: Install backtest dependencies
         run: pip install numpy pandas matplotlib scikit-learn
-      - name: Build obfast (C++ book as a Python module)
-        run: make -C cpp python
+      - name: Build obfast (C++ book as a Python module) and the C++ model runtime
+        run: make -C cpp python ml
       - name: Binding and backtest tests
         run: python -m unittest discover -s backtest -v
       - name: Backtest smoke run

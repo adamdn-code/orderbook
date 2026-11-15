@@ -35,6 +35,12 @@ build/itch_tests: tests/itch_tests.cpp itch/*.hpp $(ITCH_SRC) include/*.hpp test
 
 itch: build/itch_replay
 
+# order-flow features + gradient-boosted model in C++ (model file: python backtest/export_model.py)
+build/ml_replay: ml/ml_replay.cpp ml/*.hpp src/orderbook.cpp include/*.hpp | build
+	$(CXX) $(CXXFLAGS) -O3 -Iml ml/ml_replay.cpp src/orderbook.cpp -o $@
+
+ml: build/ml_replay
+
 test: build/tests build/itch_tests
 	./build/tests
 	./build/itch_tests
@@ -57,4 +63,5 @@ asan: | build
 clean:
 	rm -rf build
 
-.PHONY: all python itch test bench tsan asan clean
+PHONY_ML = ml
+.PHONY: all python itch ml test bench tsan asan clean

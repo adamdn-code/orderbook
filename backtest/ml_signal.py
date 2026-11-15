@@ -18,6 +18,10 @@ Labels (all look strictly forward from the sample's timestamp)
                 later change). Standard event-time target in the limit-order-book literature.
     up_100ms    1 if the mid 100 ms later is above the current mid, 0 if below (flat dropped).
     up_1s       same, 1 s later.
+    next_move_100us / _1ms / _10ms
+                latency-aware versions of next_move: the direction of the first mid change that
+                happens *after* ts + L. A quote you decide to pull at ts is only gone at ts + L, so a
+                move inside that gap can't be avoided; training on what's still avoidable is the point.
 
 Features (all causal: computed only from events at or before the sample's timestamp)
     book shape  spread, L1/L2/top-5 depth imbalance, log sizes at the touch, microprice offset
@@ -68,6 +72,8 @@ FEATURES = [
 ]
 BASELINE = "imb_l1"
 LABELS = ["next_move", "up_100ms", "up_1s"]
+LAT_LABELS = {"next_move_100us": 100_000, "next_move_1ms": 1_000_000, "next_move_10ms": 10_000_000}
+SIGNAL_LABELS = ["next_move", *LAT_LABELS]  # models whose predictions the backtest uses
 
 
 # ------------------------------------------------------------------------- replay -> snapshots
@@ -168,6 +174,13 @@ def _lag(ts: np.ndarray, values: np.ndarray, window_ns: int) -> np.ndarray:
     return np.where(j >= 0, values[np.clip(j, 0, None)], values[0])
 
 
+def _libm(fn, x: np.ndarray) -> np.ndarray:
+    """Apply a C math-library function element by element. numpy's vectorised log1p/log10 can differ
+    from the C library in the last bit, which is enough to flip a tree split now and then; using the
+    C library here makes the Python features bit-identical to the C++ ones (cpp/ml/features.hpp)."""
+    return np.fromiter(map(fn, np.asarray(x, float).tolist()), dtype=float, count=len(x))
+
+
 def features_and_labels(snap: pd.DataFrame) -> pd.DataFrame:
     s = snap
     ts = s["ts"].to_numpy()
@@ -180,7 +193,7 @@ def features_and_labels(snap: pd.DataFrame) -> pd.DataFrame:
     f["imb_l1"] = (bq1 - aq1) / (bq1 + aq1)
     f["imb_l2"] = (s["bq2"] - s["aq2"]) / (s["bq2"] + s["aq2"])
     f["imb_l5"] = (s["bq5"] - s["aq5"]) / (s["bq5"] + s["aq5"])
-    f["log_bq1"], f["log_aq1"] = np.log1p(bq1), np.log1p(aq1)
+    f["log_bq1"], f["log_aq1"] = _libm(math.log1p, bq1), _libm(math.log1p, aq1)
     micro = (bb * aq1 + ba * bq1) / (bq1 + aq1)
     f["micro_offset"] = (micro - mid) / f["spread"]
     ofi, tv, tn, mv = (s[k].to_numpy(float) for k in ("cum_ofi", "cum_tv", "cum_tn", "cum_moves"))
@@ -192,7 +205,7 @@ def features_and_labels(snap: pd.DataFrame) -> pd.DataFrame:
         f[f"trades_{name}"] = tn - _lag(ts, tn, w)
         f[f"ret_{name}"] = mid - _lag(ts, mid, w)
     f["mid_changes_10s"] = mv - _lag(ts, mv, 10 * NS)
-    f["log_since_move"] = np.log10(1 + (ts - s["last_move_ts"].to_numpy()) / 1e3)  # log10 microseconds
+    f["log_since_move"] = _libm(math.log10, 1 + (ts - s["last_move_ts"].to_numpy()) / 1e3)  # log10 microseconds
     f["last_move"] = s["last_move"].to_numpy()
 
     # ---- labels: strictly after this timestamp
@@ -201,6 +214,13 @@ def features_and_labels(snap: pd.DataFrame) -> pd.DataFrame:
     has_next = k < len(change)
     nxt = mid[change[np.clip(k, 0, len(change) - 1)]]
     f["next_move"] = np.where(has_next, (nxt > mid).astype(float), np.nan)
+    # first change after ts + L; mid[change - 1] is the mid just before that change
+    change_ts = ts[change]
+    for name, lat in LAT_LABELS.items():
+        k = np.searchsorted(change_ts, ts + lat, side="right")
+        ok = k < len(change)
+        c = change[np.clip(k, 0, len(change) - 1)]
+        f[name] = np.where(ok, (mid[c] > mid[c - 1]).astype(float), np.nan)
     for name, h in (("up_100ms", NS // 10), ("up_1s", NS)):
         j = np.searchsorted(ts, ts + h, side="right") - 1
         later = mid[j]
@@ -254,7 +274,7 @@ def block_bootstrap_ci(ts, y, scores: dict[str, np.ndarray], n_boot=200, block_n
     return out
 
 
-def fit_models(parts: dict[str, pd.DataFrame], label: str, seed: int = 0):
+def fit_models(parts: dict[str, pd.DataFrame], label: str, seed: int = 0, features: list[str] = FEATURES):
     """Tune on validation, refit on train+val. Returns fitted models and the chosen GBM settings."""
     from sklearn.ensemble import HistGradientBoostingClassifier
     from sklearn.linear_model import LogisticRegression
@@ -263,7 +283,7 @@ def fit_models(parts: dict[str, pd.DataFrame], label: str, seed: int = 0):
 
     def xy(d):
         d = d.dropna(subset=[label])
-        return d[FEATURES].to_numpy(float), d[label].to_numpy(int)
+        return d[features].to_numpy(float), d[label].to_numpy(int)
 
     Xtr, ytr = xy(parts["train"])
     Xva, yva = xy(parts["val"])
@@ -282,36 +302,42 @@ def fit_models(parts: dict[str, pd.DataFrame], label: str, seed: int = 0):
                 if best is None or a > best[0]:
                     best = (a, {"learning_rate": lr, "max_leaf_nodes": leaves, "max_iter": it})
     val_auc, params = best
+    gbm_train = HistGradientBoostingClassifier(min_samples_leaf=200, l2_regularization=1.0, early_stopping=False,
+                                               random_state=seed, **params).fit(Xtr, ytr)
     Xall = np.vstack([Xtr, Xva])
     yall = np.concatenate([ytr, yva])
     gbm = HistGradientBoostingClassifier(min_samples_leaf=200, l2_regularization=1.0, early_stopping=False,
                                          random_state=seed, **params).fit(Xall, yall)
     logit = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)).fit(Xall, yall)
-    return {"logistic": logit, "gbm": gbm}, {"gbm_params": params, "gbm_val_auc": val_auc}
+    return {"logistic": logit, "gbm": gbm, "gbm_train": gbm_train}, {"gbm_params": params, "gbm_val_auc": val_auc}
 
 
 def evaluate(f: pd.DataFrame, out: Path, n_boot: int = 200) -> dict:
     parts = split(f)
     report: dict = {"samples": {k: int(len(v)) for k, v in parts.items()}, "labels": {}}
     models_by_label = {}
-    for label in LABELS:
+    for label in [*LABELS, *LAT_LABELS]:
         t0 = time.perf_counter()
         models, info = fit_models(parts, label)
         models_by_label[label] = models
         te = parts["test"].dropna(subset=[label])
         X, y = te[FEATURES].to_numpy(float), te[label].to_numpy(int)
         scores = {"imbalance": te[BASELINE].to_numpy(float)}
-        for name, m in models.items():
-            scores[name] = m.predict_proba(X)[:, 1]
+        for name in ("logistic", "gbm"):
+            scores[name] = models[name].predict_proba(X)[:, 1]
+        if label in LAT_LABELS:  # does training for the latency beat reusing the zero-latency model?
+            scores["gbm_next_move"] = models_by_label["next_move"]["gbm"].predict_proba(X)[:, 1]
         res = {name: auc(y, s) for name, s in scores.items()}
         ci = block_bootstrap_ci(te["ts_ns"].to_numpy(), y, scores, n_boot=n_boot)
-        report["labels"][label] = {
+        key = "latency_labels" if label in LAT_LABELS else "labels"
+        report.setdefault(key, {})[label] = {
             "test_samples": int(len(te)), "base_rate": float(y.mean()),
             "auc": res, "ci95": ci, **info, "fit_seconds": round(time.perf_counter() - t0, 1),
         }
-        print(f"  {label:<10} n={len(te):>9,}  AUC imbalance {res['imbalance']:.4f}  logistic {res['logistic']:.4f}  "
+        extra = f"  next_move model {res['gbm_next_move']:.4f}" if "gbm_next_move" in res else ""
+        print(f"  {label:<16} n={len(te):>9,}  AUC imbalance {res['imbalance']:.4f}  logistic {res['logistic']:.4f}  "
               f"gbm {res['gbm']:.4f}  (gbm - imbalance 95% CI {ci['gbm_minus_imbalance'][0]:+.4f} .. "
-              f"{ci['gbm_minus_imbalance'][1]:+.4f})")
+              f"{ci['gbm_minus_imbalance'][1]:+.4f}){extra}")
     return report, models_by_label, parts
 
 
@@ -418,9 +444,18 @@ def main() -> None:
     gbm = models["next_move"]["gbm"]
     ex = extras(parts, gbm, out)
     charts(report, ex, out)
-    p_all = gbm.predict_proba(f[FEATURES].to_numpy(float))[:, 1]
+    Xall = f[FEATURES].to_numpy(float)
+    preds = {}
+    for label in SIGNAL_LABELS:
+        # final model (train + validation) for the test period; train-only model for choosing settings on validation
+        preds[f"p_{label}"] = models[label]["gbm"].predict_proba(Xall)[:, 1].astype(np.float32)
+        preds[f"p_{label}_train"] = models[label]["gbm_train"].predict_proba(Xall)[:, 1].astype(np.float32)
     np.savez_compressed(out / "signal.npz", snap_event_idx=idx, ts_ns=f["ts_ns"].to_numpy(),
-                        p_up=p_all.astype(np.float32), imb_l1=f["imb_l1"].to_numpy(np.float32), n_events=ev.n)
+                        p_up=preds["p_next_move"], imb_l1=f["imb_l1"].to_numpy(np.float32), n_events=ev.n, **preds)
+    import pickle
+    with open(out / "models.pkl", "wb") as fh:  # for the C++ export and the toxicity study
+        pickle.dump({"features": FEATURES, **{label: models[label]["gbm"] for label in SIGNAL_LABELS}}, fh)
+    report["models_saved"] = SIGNAL_LABELS
     report["split"] = {"train": "09:35-12:30", "val": "12:30-13:30", "test": "13:30-15:55", "embargo_s": 60}
     report["features"] = FEATURES
     (out / "metrics.json").write_text(json.dumps(clean({**report, **{k: ex[k] for k in ("auc_by_time", "importance", "calibration", "roc")}}),

@@ -67,6 +67,11 @@ class Strategy:
     # one value per event. Pull the ask while p_up > 0.5 + model_pull (the price is about to rise
     # through it) and the bid while p_up < 0.5 - model_pull.
     model_pull: float = 0.0  # 0 = off
+    # Signal: predicted markout (cents/share) of a fill on each side (ml_toxicity.py), passed to run()
+    # as two per-event arrays. Pull a side while its predicted markout is below this many cents.
+    tox_threshold: float | None = None  # None = off
+    # What a signal does to a threatened quote: pull it (False) or move it one cent further back (True).
+    shift: bool = False
 
 
 @dataclass
@@ -106,6 +111,7 @@ class ShadowMaker:
         self.s = strat
         self.window = window
         self.p_up = float("nan")  # model signal at the current event (NaN = no opinion)
+        self.tox_bid = self.tox_ask = float("nan")  # predicted fill markouts (cents) at the current event
         self.inventory = 0
         self.cash = 0.0  # dollars
         self.rebates = 0.0
@@ -181,9 +187,15 @@ class ShadowMaker:
         if s.model_pull and self.p_up == self.p_up:  # not NaN
             pull_ask = pull_ask or self.p_up > 0.5 + s.model_pull
             pull_bid = pull_bid or self.p_up < 0.5 - s.model_pull
+        if s.tox_threshold is not None:
+            pull_bid = pull_bid or self.tox_bid < s.tox_threshold  # NaN compares False: no opinion
+            pull_ask = pull_ask or self.tox_ask < s.tox_threshold
         skew = (abs(inv) // s.skew_step) if s.skew_step else 0
         bid = best_bid - s.back_ticks - (skew if inv > 0 else 0)
         ask = best_ask + s.back_ticks + (skew if inv < 0 else 0)
+        if s.shift:  # step back instead of leaving the queue
+            bid, ask = bid - pull_bid, ask + pull_ask
+            pull_bid = pull_ask = False
         return {
             BUY: bid if inv + s.size <= s.max_inventory and not pull_bid else None,
             SELL: ask if inv - s.size >= -s.max_inventory and not pull_ask else None,
@@ -227,17 +239,24 @@ class ShadowMaker:
 
 
 def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS, signal=None,
-        window: tuple[int, int] = (QUOTE_START, QUOTE_END)):
+        window: tuple[int, int] = (QUOTE_START, QUOTE_END), tox=None, stop_early: bool = False):
     """Replay the day once with one strategy. Returns (summary, timeline DataFrame, fills DataFrame, mids).
 
     `signal` (needed when strat.model_pull is set) holds P(next mid move up) as known at each event,
-    see ml_signal.event_signal. `window` is when the market maker quotes; the whole day is still
-    replayed so the book is right when quoting starts."""
+    see ml_signal.event_signal. `tox` (needed when strat.tox_threshold is set) is a pair of per-event
+    arrays: predicted markout of a bid fill and of an ask fill. `window` is when the market maker
+    quotes; the day is replayed from the start so the book is right when quoting starts. With
+    stop_early the replay ends 5 minutes after the window and leftover inventory is marked at the mid
+    (used for the short tuning-period runs); otherwise it runs to the close and marks at the closing cross."""
     if strat.model_pull and signal is None:
         raise ValueError("model_pull needs a per-event signal")
+    if strat.tox_threshold is not None and tox is None:
+        raise ValueError("tox_threshold needs per-event toxicity signals")
     book = obfast.Book()
     mm = ShadowMaker(strat, window)
     sig = signal.tolist() if signal is not None else None
+    tb, ta = (tox[0].tolist(), tox[1].tolist()) if tox is not None else (None, None)
+    stop_at = window[1] + 5 * 60 * NS if stop_early else None
     mid_t: list[int] = []
     mid_v: list[float] = []
     rows = []
@@ -260,9 +279,13 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS, signal=
                                                       events.shares, events.price, events.new_ref)
     for i in range(events.n):
         ts, typ, ref, side, shares, px = ts_l[i], typ_l[i], ref_l[i], side_l[i], sh_l[i], px_l[i]
+        if stop_at is not None and ts > stop_at:
+            break
         mm.apply_pending(book, ts)
         if sig is not None:
             mm.p_up = sig[i]
+        if tb is not None:
+            mm.tox_bid, mm.tox_ask = tb[i], ta[i]
         price_c = px // 100
         removed = 0
         new_price = None
@@ -309,7 +332,8 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS, signal=
                 mid_t.append(ts)
                 mid_v.append((bb + ba) / 2)
             mm.requote(book, ts)
-        elif strat.imbalance_pull or strat.min_level_shares or strat.model_pull or mm.quotes[BUY] is None or mm.quotes[SELL] is None:
+        elif (strat.imbalance_pull or strat.min_level_shares or strat.model_pull or strat.tox_threshold is not None
+              or mm.quotes[BUY] is None or mm.quotes[SELL] is None):
             mm.requote(book, ts)  # the signal can change without the best prices changing
         if ts >= next_record and mid_v:
             next_record = (ts // record_every_ns + 1) * record_every_ns

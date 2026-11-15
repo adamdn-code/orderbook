@@ -1,0 +1,59 @@
+{
+ "imbalance_auc": 0.6034389394564285,
+ "rows": [
+  {
+   "trees": 300,
+   "max_depth": 25,
+   "label": "full (tuned)",
+   "auc": 0.6516033619506599,
+   "predict_ns": 7304.66,
+   "p50_ns": 7823,
+   "p99_ns": 20156
+  },
+  {
+   "trees": 10,
+   "max_depth": 4,
+   "label": "10 trees, depth 4",
+   "auc": 0.641640066754139,
+   "predict_ns": 121.512,
+   "p50_ns": 262,
+   "p99_ns": 544
+  },
+  {
+   "trees": 25,
+   "max_depth": 4,
+   "label": "25 trees, depth 4",
+   "auc": 0.6457733176844561,
+   "predict_ns": 184.631,
+   "p50_ns": 254,
+   "p99_ns": 536
+  },
+  {
+   "trees": 50,
+   "max_depth": 6,
+   "label": "50 trees, depth 6",
+   "auc": 0.6504716022351407,
+   "predict_ns": 404.653,
+   "p50_ns": 567,
+   "p99_ns": 908
+  },
+  {
+   "trees": 100,
+   "max_depth": 6,
+   "label": "100 trees, depth 6",
+   "auc": 0.6499374849753681,
+   "predict_ns": 1026.58,
+   "p50_ns": 1189,
+   "p99_ns": 1493
+  },
+  {
+   "trees": 200,
+   "max_depth": 8,
+   "label": "200 trees, depth 8",
+   "auc": 0.6507820901243843,
+   "predict_ns": 2715.6,
+   "p50_ns": 2966,
+   "p99_ns": 7565
+  }
+ ]
+}

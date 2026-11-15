@@ -10,7 +10,7 @@
 <style>
 :root {
   --ink: #0e1a2b; --panel: #142339; --line: #233650; --text: #dde6f1; --muted: #8a9bb4;
-  --bid: #4cb5df; --ask: #efa54b; --good: #5cc79a; --bad: #e86a5a; --grey: #8a9bb4;
+  --bid: #4cb5df; --ask: #efa54b; --good: #5cc79a; --bad: #e86a5a; --grey: #8a9bb4; --lat: #7fd38f; --tox: #c39bea;
   --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
@@ -20,29 +20,33 @@ html, body { margin: 0; background: var(--ink); color: var(--text); font-family:
 body { padding: 20px clamp(16px, 3vw, 40px) 40px; max-width: 1440px; margin: 0 auto; }
 a { color: var(--bid); }
 a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ask); outline-offset: 2px; }
-.num { font-variant-numeric: tabular-nums; }
 .top { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
 h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 44px); letter-spacing: 0.01em; line-height: 1; margin: 0; text-wrap: balance; }
 h1 .sym { color: var(--ask); }
-.sub { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+.sub { margin: 6px 0 0; color: var(--muted); max-width: 74ch; }
 .links { display: flex; gap: 18px; font-weight: 500; white-space: nowrap; }
 h2 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; margin: 0 0 10px; }
-.board { margin-top: 18px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+h3 { font-size: 14px; font-weight: 600; margin: 14px 0 6px; color: var(--text); }
+.board { margin-top: 16px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .cell { background: var(--panel); padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .label { color: var(--muted); font-size: 12.5px; }
 .big { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 3.2vw, 46px); line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .delta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pos { color: var(--good); } .neg { color: var(--bad); }
-.controls { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; }
-.ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.seg button { font: inherit; font-size: 13.5px; color: var(--text); background: var(--ink); border: 0; border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
+.controls { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; }
+.ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 13.5px; color: var(--text); background: var(--ink); border: 0; border-right: 1px solid var(--line); padding: 6px 11px; cursor: pointer; }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--ask); color: var(--ink); font-weight: 600; }
-input[type=range] { accent-color: var(--ask); width: 160px; }
+.seg button:disabled { opacity: 0.35; cursor: not-allowed; }
+.chip { font: inherit; font-size: 12.5px; color: var(--ask); background: transparent; border: 1px solid var(--ask); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip:disabled { opacity: 0.35; cursor: default; }
+input[type=range] { accent-color: var(--ask); width: 150px; }
 input[type=range]:disabled { opacity: 0.35; }
-#pullv { min-width: 3.2em; color: var(--text); font-variant-numeric: tabular-nums; }
+#pullv { min-width: 3.4em; color: var(--text); font-variant-numeric: tabular-nums; }
 .grid2 { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+.grid2.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .grid3 { margin-top: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
 .plot { position: relative; height: 280px; }
@@ -51,18 +55,20 @@ input[type=range]:disabled { opacity: 0.35; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 .note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
+.tbl { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
 th { color: var(--muted); font-weight: 500; }
-.verdict { font-size: 15px; margin: 0; }
-.prose p { margin: 0 0 8px; color: var(--text); }
-.prose li { margin-bottom: 4px; }
-.prose { font-size: 14px; }
+td small { display: block; color: var(--muted); font-size: 11.5px; }
+td.wrap, th.wrap { white-space: normal; }
+tr.cur td { background: rgba(239, 165, 75, 0.10); }
+.prose p { margin: 0 0 8px; } .prose li { margin-bottom: 4px; } .prose { font-size: 14px; }
+.empty { color: var(--muted); font-size: 13px; font-style: italic; }
 #err { display: none; margin-top: 20px; padding: 14px 16px; border: 1px solid var(--bad); border-radius: 6px; }
 @media (max-width: 980px) {
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .grid2, .grid2.even, .grid3 { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
 </head>
@@ -70,7 +76,7 @@ th { color: var(--muted); font-weight: 500; }
 <header class="top">
   <div>
     <h1>Market-making <span class="sym">playground</span></h1>
-    <p class="sub" id="sub">A market maker quoting AAPL on real Nasdaq order flow, with a machine-learning filter that pulls quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.</p>
+    <p class="sub" id="sub">A market maker quoting AAPL on real Nasdaq order flow, with machine-learning filters that pull or step back quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.</p>
   </div>
   <nav class="links"><a href="index.html">Order book replay</a><a href="https://github.com/adamdn-code/orderbook">Source on GitHub</a></nav>
 </header>
@@ -80,13 +86,17 @@ th { color: var(--muted); font-weight: 500; }
 <section class="controls" aria-label="Strategy settings">
   <div class="ctl">Filter
     <span class="seg" id="filter">
-      <button data-v="none">None</button><button data-v="imbalance">Imbalance</button><button data-v="model" aria-pressed="true">ML model</button>
+      <button data-v="none">None</button><button data-v="imbalance">Imbalance</button><button data-v="model" aria-pressed="true">ML: next move</button><button data-v="model_lat">ML: latency-trained</button><button data-v="toxicity">ML: fill toxicity</button>
     </span>
   </div>
-  <div class="ctl"><label for="pull">Pull quotes</label>
+  <div class="ctl"><label for="pull">Active</label>
     <input type="range" id="pull" min="0" max="5" step="1" value="2"><span id="pullv"></span><span>of the time</span>
+    <button class="chip" id="chosen" title="Use the rate picked on the 12:30–13:30 tuning hour, before looking at the test period">★ tuning-hour pick</button>
   </div>
   <div class="ctl">Latency <span class="seg" id="latency"></span></div>
+  <div class="ctl">When triggered <span class="seg" id="action">
+      <button data-v="pull" aria-pressed="true">Pull quote</button><button data-v="shift">Step back 1¢</button></span>
+  </div>
   <div class="ctl">Quote at <span class="seg" id="placement">
       <button data-v="join" aria-pressed="true">Best price</button><button data-v="behind">1¢ behind</button></span>
   </div>
@@ -103,15 +113,21 @@ th { color: var(--muted); font-weight: 500; }
 <section class="grid2">
   <div class="box">
     <h2>PnL through the afternoon</h2>
-    <div class="plot"><canvas id="c-pnl" role="img" aria-label="PnL over time for the selected strategy, no filter, and the other signal"></canvas></div>
+    <div class="plot"><canvas id="c-pnl" role="img" aria-label="PnL over time for the selected strategy and no filter"></canvas></div>
     <div class="legend" id="lg-pnl"></div>
   </div>
   <div class="box">
     <h2>Edge, not just less trading</h2>
     <div class="plot"><canvas id="c-front" role="img" aria-label="PnL per 100 shares against shares traded for each filter"></canvas></div>
-    <div class="legend"><span><i style="background:var(--bid)"></i>ML model</span><span><i style="background:var(--ask)"></i>Imbalance</span><span><i style="background:var(--grey)"></i>No filter</span></div>
-    <p class="note">Each point is one pull rate (10–60%). Both filters trade less as they pull more; a filter only adds edge if its line sits <em>above</em> the other at the same volume.</p>
+    <div class="legend" id="lg-front"></div>
+    <p class="note">Each point is one activity rate (10–60%), stars mark the rate picked on the tuning hour. Every filter trades less as it pulls more; it only adds edge if its line sits <em>above</em> the others at the same volume.</p>
   </div>
+</section>
+
+<section class="box" style="margin-top:16px">
+  <h2>Honest scorecard: rates picked before seeing the test period</h2>
+  <div class="tbl"><table id="t-head"></table></div>
+  <p class="note" id="head-note"></p>
 </section>
 
 <section class="grid3">
@@ -122,7 +138,7 @@ th { color: var(--muted); font-weight: 500; }
   </div>
   <div class="box">
     <h2>Test AUC by label</h2>
-    <table id="t-auc"></table>
+    <div class="tbl"><table id="t-auc"></table></div>
     <p class="note" id="auc-note"></p>
   </div>
   <div class="box">
@@ -132,21 +148,42 @@ th { color: var(--muted); font-weight: 500; }
   </div>
 </section>
 
+<section class="grid2 even">
+  <div class="box">
+    <h2>Away from this afternoon</h2>
+    <h3>Other stocks, same day (test period 13:30–15:55)</h3>
+    <div class="tbl" id="x-stocks"></div>
+    <h3 id="d2-title">A second day nobody tuned on</h3>
+    <div class="tbl" id="x-day2"></div>
+    <h3>Does SPY lead AAPL?</h3>
+    <div id="x-spy"></div>
+  </div>
+  <div class="box">
+    <h2>Training for latency, and for fills</h2>
+    <h3>Latency-aware labels: predict the first move after your cancel can land</h3>
+    <div class="tbl" id="x-lat"></div>
+    <h3>Fill-toxicity model: trained on the market maker's own fills</h3>
+    <div class="tbl" id="x-tox"></div>
+    <h3>In C++, next to the matching engine</h3>
+    <div id="x-cpp"></div>
+  </div>
+</section>
+
 <section class="grid2">
   <div class="box prose">
     <h2>How this was built</h2>
-    <p><b>Model.</b> Gradient-boosted trees predict whether AAPL's next mid-price move is up or down, from order-flow features computed only from events up to that moment: depth imbalance at 1, 2 and 5 levels, order-flow imbalance over 100 ms, 1 s and 10 s, signed trade volume, recent returns and activity. One sample per timestamp, taken after a whole sweep has been applied.</p>
-    <p><b>Honest split.</b> Train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55 (including the 2 pm Fed announcement), with a 60 s embargo at each boundary. No shuffling. The test period is used once, and everything on this page comes from it.</p>
-    <p><b>Backtest.</b> Quotes are shadow orders whose queue position is tracked exactly from Nasdaq's order-level feed, with place/cancel latency and a $0.0020/share rebate. The filter pulls the ask while the model expects an up-move (and the bid for a down-move).</p>
-    <p><b>Fair comparison.</b> The imbalance and model thresholds are set so each filter is active the same share of the time on the tuning period. Pulling more always means trading less, so the right question is loss <em>per share</em> at equal pull rates.</p>
+    <p><b>Models.</b> Gradient-boosted trees on 19 order-flow features computed only from events up to that moment (depth imbalance at 1, 2 and 5 levels, order-flow imbalance over 100 ms, 1 s and 10 s, signed trade volume, queue sizes, recent moves). <i>Next move</i> predicts the direction of the next mid-price change. <i>Latency-trained</i> predicts the first change after the cancel could land, since nothing can dodge a move inside that gap. <i>Fill toxicity</i> predicts the 1-second markout of a fill on each side, trained directly on the fills the plain market maker got in the morning.</p>
+    <p><b>Honest split.</b> Train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55 (including the 2 pm Fed announcement), 60 s embargo, never shuffled. Thresholds, pull rates and model settings all come from the tuning hour. The test period is used once.</p>
+    <p><b>Backtest.</b> Quotes are shadow orders whose queue position is tracked exactly from Nasdaq's order-level feed, with place/cancel latency and a $0.0020/share rebate. A triggered filter either pulls the threatened quote or steps it back a cent.</p>
+    <p><b>Fair comparison.</b> Each filter's thresholds are set so it is active the same share of the time on the tuning hour. Pulling more always means trading less, so the question is loss <em>per share</em> at equal activity.</p>
   </div>
   <div class="box prose">
     <h2>Limits</h2>
     <ul>
-      <li>One stock, one day, one test afternoon. The AUC intervals (block bootstrap over 1-minute blocks) cover sampling noise inside that afternoon, not other days.</li>
+      <li>The backtests are one stock's afternoon. The second day and the other stocks test the model's predictions more broadly; see the panels above for how far they go.</li>
       <li>Shadow orders have no market impact, so fill counts are on the high side.</li>
       <li>The rebate is assumed; auction and hidden-order fills are not modelled.</li>
-      <li>The model is scored on the next move's direction, not its timing. A correct prediction can still arrive after the quote is hit.</li>
+      <li>The tuning hour is short, so the pull rate it picks is a noisy choice. That's the honest cost of not peeking.</li>
     </ul>
   </div>
 </section>
@@ -155,69 +192,93 @@ th { color: var(--muted); font-weight: 500; }
 "use strict";
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const C = { bid: css("--bid"), ask: css("--ask"), grey: css("--grey"), line: css("--line"), muted: css("--muted"), text: css("--text") };
-const COLOR = { model: C.bid, imbalance: C.ask, none: C.grey };
-const NAME = { model: "ML model", imbalance: "Imbalance", none: "No filter" };
-const state = { filter: "model", pull: 2, latency: 100, placement: "join" };
-let D, index;
+const C = { bid: css("--bid"), ask: css("--ask"), grey: css("--grey"), line: css("--line"), muted: css("--muted"), text: css("--text"), lat: css("--lat"), tox: css("--tox") };
+const COLOR = { model: C.bid, imbalance: C.ask, none: C.grey, model_lat: C.lat, toxicity: C.tox };
+const NAME = { model: "ML: next move", imbalance: "Imbalance", none: "No filter", model_lat: "ML: latency-trained", toxicity: "ML: fill toxicity" };
+const FILTERS = ["imbalance", "model", "model_lat", "toxicity"];
+const state = { filter: "model", pull: 2, latency: 0, placement: "join", action: "pull" };
+let D, index, chosen;
 
 const money = (v) => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const per = (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(3);
 const signed = (v, d = 2) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d);
 const lat = (us) => us === 0 ? "0" : us >= 1000 ? `${us / 1000} ms` : `${us} µs`;
 const hhmm = (s) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}`;
+const f3 = (v) => v == null ? "–" : v.toFixed(3);
+const ci = (c) => c ? `${signed(c[0], 3)} to ${signed(c[1], 3)}` : "–";
+const gainCi = (g, c) => `<b>${signed(g, 3)}</b><small>${c ? `${signed(c[0], 3)} to ${signed(c[1], 3)}` : ""}</small>`;
 
-function key(f, rate, latency, placement) { return `${f}|${f === "none" ? 0 : rate}|${latency}|${placement}`; }
-function get(f, pullIdx, s = state) { return index.get(key(f, f === "none" ? 0 : D.meta.pull_rates[pullIdx], s.latency, s.placement)); }
+// model_lat at zero latency is the same model as `model`
+function effFilter(f, latency) { return f === "model_lat" && latency === 0 ? "model" : f; }
+function key(f, rate, latency, placement, action) { return `${f}|${f === "none" ? 0 : rate}|${latency}|${placement}|${f === "none" ? "pull" : action}`; }
+function get(f, pullIdx, s = state) {
+  const ff = effFilter(f, s.latency);
+  const action = s.placement === "behind" ? "pull" : s.action;
+  return index.get(key(ff, ff === "none" ? 0 : D.meta.pull_rates[pullIdx], s.latency, s.placement, action));
+}
+function chosenIdx(f, s = state) {
+  const r = chosen.get(`${effFilter(f, s.latency)}|${s.latency}|${s.placement === "behind" ? "pull" : s.action}`);
+  return r == null ? -1 : D.meta.pull_rates.indexOf(r);
+}
 
 function seg(id, onPick) {
   $(id).addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
+    const b = e.target.closest("button"); if (!b || b.disabled) return;
     for (const x of $(id).children) x.setAttribute("aria-pressed", x === b ? "true" : "false");
     onPick(b.dataset.v); render();
   });
 }
+function press(id, v) { for (const x of $(id).children) x.setAttribute("aria-pressed", x.dataset.v === String(v) ? "true" : "false"); }
 
 function setup() {
-  index = new Map(D.runs.map((r) => [key(r.filter, r.pull_rate, r.latency_us, r.placement), r]));
-  const lats = D.meta.latencies_us.filter((l) => D.runs.some((r) => r.latency_us === l));
+  index = new Map(D.runs.map((r) => [key(r.filter, r.pull_rate, r.latency_us, r.placement, r.action), r]));
+  chosen = new Map((D.meta.selected || []).map((s) => [`${s.filter}|${s.latency_us}|${s.action}`, s.pull_rate]));
+  const lats = D.meta.latencies_us;
   if (!lats.includes(state.latency)) state.latency = lats[0];
   $("latency").innerHTML = lats.map((l) => `<button data-v="${l}" aria-pressed="${l === state.latency}">${lat(l)}</button>`).join("");
-  const places = D.meta.placements.filter((p) => D.runs.some((r) => r.placement === p));
-  for (const b of $("placement").children) if (!places.includes(b.dataset.v)) b.disabled = true;
+  for (const b of $("placement").children) if (!D.meta.placements.includes(b.dataset.v)) b.disabled = true;
+  for (const b of $("action").children) if (!D.meta.actions.includes(b.dataset.v)) b.disabled = true;
   $("pull").max = D.meta.pull_rates.length - 1;
   seg("filter", (v) => (state.filter = v));
   seg("latency", (v) => (state.latency = +v));
-  seg("placement", (v) => (state.placement = v));
+  seg("placement", (v) => { state.placement = v; if (v === "behind") { state.action = "pull"; press("action", "pull"); } });
+  seg("action", (v) => (state.action = v));
   $("pull").addEventListener("input", (e) => { state.pull = +e.target.value; render(); });
-  $("sub").textContent = `A market maker quoting ${D.meta.symbol} on real Nasdaq order flow (${D.meta.date}, ${D.meta.window}), with a machine-learning filter that pulls quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.`;
-  modelPanels();
-  render();
-  window.addEventListener("resize", () => { render(); modelPanels(); });
+  $("chosen").addEventListener("click", () => { const i = chosenIdx(state.filter); if (i >= 0) { state.pull = i; $("pull").value = i; render(); } });
+  $("sub").textContent = `A market maker quoting ${D.meta.symbol} on real Nasdaq order flow (${D.meta.date}, ${D.meta.window}), with machine-learning filters that pull or step back quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.`;
+  // start on the tuning-hour pick
+  const i0 = chosenIdx(state.filter); if (i0 >= 0) { state.pull = i0; $("pull").value = i0; }
+  modelPanels(); extraPanels(); render();
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { render(); modelPanels(); }, 120); });
 }
 
 function setBoard(id, text, delta, better) {
   $("b-" + id).textContent = text;
-  const d = $("d-" + id);
-  d.textContent = delta ?? "";
+  const d = $("d-" + id); d.textContent = delta ?? "";
   d.className = "delta" + (better == null ? "" : better ? " pos" : " neg");
 }
 
 function render() {
-  $("pullv").textContent = Math.round(D.meta.pull_rates[state.pull] * 100) + "%";
+  const behind = state.placement === "behind";
+  for (const b of $("action").children) b.disabled = behind || !D.meta.actions.includes(b.dataset.v);
+  const ci0 = chosenIdx(state.filter);
+  $("pullv").textContent = Math.round(D.meta.pull_rates[state.pull] * 100) + "%" + (ci0 === state.pull ? " ★" : "");
   $("pull").disabled = state.filter === "none";
+  $("chosen").disabled = state.filter === "none" || ci0 < 0;
   const r = get(state.filter, state.pull), base = get("none", 0);
   if (!r || !base) return;
   const vs = state.filter === "none" ? null : "vs no filter";
   const dp = r.pnl_with_rebate - base.pnl_with_rebate;
-  setBoard("pnl", money(r.pnl_with_rebate), vs && `${dp >= 0 ? "+" : "−"}${money(Math.abs(dp)).replace("−", "")} ${vs}`, vs && dp >= 0);
+  setBoard("pnl", money(r.pnl_with_rebate), vs && `${dp >= 0 ? "+" : "−"}${money(Math.abs(dp))} ${vs}`, vs && dp >= 0);
   setBoard("shares", r.shares.toLocaleString("en-US"), vs && `${Math.round((r.shares / base.shares - 1) * 100)}% ${vs}`, null);
   const dper = r.pnl_per_100_shares - base.pnl_per_100_shares;
-  setBoard("per", (r.pnl_per_100_shares < 0 ? "−$" : "$") + Math.abs(r.pnl_per_100_shares).toFixed(3), vs && `${signed(dper, 3)} ${vs}`, vs && dper >= 0);
-  const dmk = r["markout_1s"] - base["markout_1s"];
-  setBoard("mk", signed(r["markout_1s"]), vs && `${signed(dmk)} ${vs}`, vs && dmk >= 0);
+  setBoard("per", per(r.pnl_per_100_shares), vs && `${signed(dper, 3)} ${vs}`, vs && dper >= 0);
+  const dmk = r.markout_1s - base.markout_1s;
+  setBoard("mk", signed(r.markout_1s), vs && `${signed(dmk)} ${vs}`, vs && dmk >= 0);
   setBoard("inv", r.max_abs_inventory.toLocaleString("en-US"), vs && `${base.max_abs_inventory.toLocaleString("en-US")} with no filter`, null);
   pnlChart(r, base);
   frontier(r);
+  headline();
 }
 
 // ---------------------------------------------------------------- canvas helpers
@@ -250,18 +311,19 @@ function line(g, xs, ys, X, Y, color, width = 2, dash = []) {
   g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash); g.beginPath();
   xs.forEach((x, i) => (i ? g.lineTo(X(x), Y(ys[i])) : g.moveTo(X(x), Y(ys[i])))); g.stroke(); g.setLineDash([]);
 }
+function star(g, x, y, r, color) {
+  g.fillStyle = color; g.strokeStyle = C.ink || "#0e1a2b"; g.lineWidth = 1; g.beginPath();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a)); }
+  g.closePath(); g.fill(); g.stroke();
+}
 
 function pnlChart(r, base) {
   const { g, w, h } = canvas("c-pnl");
   const t = D.mid.t;
-  const other = state.filter === "model" ? "imbalance" : state.filter === "imbalance" ? "model" : null;
-  const o = other && get(other, state.pull);
-  const series = [[base, "none", [5, 4], 1.5]];
-  if (o) series.push([o, other, [], 1.5]);
-  if (state.filter !== "none") series.push([r, state.filter, [], 2.5]);
+  const series = [[base, "none", [5, 4], 1.5, "No filter"]];
+  if (state.filter !== "none") series.push([r, state.filter, [], 2.5, `${NAME[state.filter]} (${Math.round(D.meta.pull_rates[state.pull] * 100)}%)`]);
   const n = Math.min(t.length, ...series.map((s) => s[0].series.pnl.length));
-  const all = series.flatMap((s) => s[0].series.pnl.slice(0, n)).concat([0]);
-  const yr = range(all), xr = [t[0], t[n - 1]];
+  const yr = range(series.flatMap((s) => s[0].series.pnl.slice(0, n)).concat([0])), xr = [t[0], t[n - 1]];
   const pad = { l: 64, r: 12, t: 10, b: 24 };
   const hourTicks = []; for (let s = Math.ceil(xr[0] / 1800) * 1800; s <= xr[1]; s += 1800) hourTicks.push(s);
   const { X, Y } = axes(g, w, h, pad, xr, yr, hourTicks, ticks(yr[0], yr[1]), hhmm, money);
@@ -271,32 +333,54 @@ function pnlChart(r, base) {
     g.fillStyle = C.ask; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("Fed 2:00 pm", X(fed) + 4, pad.t);
   }
   for (const [run, f, dash, wd] of series) line(g, t.slice(0, n), run.series.pnl.slice(0, n), X, Y, COLOR[f], wd, dash);
-  const rate = Math.round(D.meta.pull_rates[state.pull] * 100);
-  $("lg-pnl").innerHTML = series.map(([run, f, dash]) => `<span><i style="background:${COLOR[f]}${dash.length ? ";opacity:.7" : ""}"></i>${NAME[f]}${f === "none" ? "" : ` (pull ${rate}%)`}: ${money(run.pnl_with_rebate)}</span>`).join("");
+  $("lg-pnl").innerHTML = series.map(([run, f, dash, , label]) => `<span><i style="background:${COLOR[f]}${dash.length ? ";opacity:.7" : ""}"></i>${label}: ${money(run.pnl_with_rebate)}</span>`).join("");
 }
 
 function frontier(sel) {
   const { g, w, h } = canvas("c-front");
   const pts = {};
-  for (const f of ["imbalance", "model"]) pts[f] = D.meta.pull_rates.map((_, i) => get(f, i)).filter(Boolean);
+  for (const f of FILTERS) pts[f] = D.meta.pull_rates.map((_, i) => [i, get(f, i)]).filter((p) => p[1]);
   const base = get("none", 0);
-  const all = [...pts.imbalance, ...pts.model, base];
+  const all = [...FILTERS.flatMap((f) => pts[f].map((p) => p[1])), base];
   const xr = range(all.map((r) => r.shares / 1000)), yr = range(all.map((r) => r.pnl_per_100_shares).concat([0]));
   const pad = { l: 56, r: 12, t: 10, b: 36 };
   const { X, Y } = axes(g, w, h, pad, xr, yr, ticks(xr[0], xr[1], 4), ticks(yr[0], yr[1]), (v) => v + "k", (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(2));
-  g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("shares traded", pad.l + (w - pad.l - pad.r) / 2, h - 14);
+  g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("shares traded", pad.l + (w - pad.l - pad.r) / 2, h - 12);
   g.strokeStyle = C.muted; g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
-  for (const f of ["imbalance", "model"]) {
-    const p = pts[f]; line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR[f], 2);
-    for (const r of p) { g.fillStyle = COLOR[f]; g.beginPath(); g.arc(X(r.shares / 1000), Y(r.pnl_per_100_shares), 3.5, 0, 7); g.fill(); }
+  const shown = FILTERS.filter((f) => !(f === "model_lat" && state.latency === 0));
+  for (const f of shown) {
+    const p = pts[f].map((q) => q[1]); if (!p.length) continue;
+    const width = f === effFilter(state.filter, state.latency) ? 2.6 : 1.4;
+    line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR[f], width);
+    const ci0 = chosenIdx(f);
+    for (const [i, r] of pts[f]) {
+      if (i === ci0) star(g, X(r.shares / 1000), Y(r.pnl_per_100_shares), 7, COLOR[f]);
+      else { g.fillStyle = COLOR[f]; g.beginPath(); g.arc(X(r.shares / 1000), Y(r.pnl_per_100_shares), 3.2, 0, 7); g.fill(); }
+    }
   }
   g.fillStyle = C.grey; g.beginPath(); g.arc(X(base.shares / 1000), Y(base.pnl_per_100_shares), 5, 0, 7); g.fill();
-  g.strokeStyle = C.text; g.lineWidth = 2; g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 8, 0, 7); g.stroke();
+  g.strokeStyle = C.text; g.lineWidth = 2; g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 9, 0, 7); g.stroke();
+  $("lg-front").innerHTML = shown.map((f) => `<span><i style="background:${COLOR[f]}"></i>${NAME[f]}</span>`).join("") + `<span><i style="background:${C.grey}"></i>No filter</span>`;
+}
+
+function headline() {
+  const base = get("none", 0);
+  const actionName = state.placement === "behind" ? "pull" : state.action;
+  let rows = `<tr><th>Filter</th><th>Picked rate</th><th>PnL with rebate</th><th>Shares</th><th>Per 100 shares</th><th>1 s markout</th></tr>`;
+  rows += `<tr class="${state.filter === "none" ? "cur" : ""}"><td>No filter</td><td>–</td><td>${money(base.pnl_with_rebate)}</td><td>${base.shares.toLocaleString("en-US")}</td><td>${per(base.pnl_per_100_shares)}</td><td>${signed(base.markout_1s)}¢</td></tr>`;
+  for (const f of FILTERS) {
+    if (f === "model_lat" && state.latency === 0) continue;
+    const i = chosenIdx(f); if (i < 0) continue;
+    const r = get(f, i); if (!r) continue;
+    const cur = effFilter(state.filter, state.latency) === f ? "cur" : "";
+    rows += `<tr class="${cur}"><td>${NAME[f]}</td><td>${Math.round(D.meta.pull_rates[i] * 100)}%</td><td>${money(r.pnl_with_rebate)}</td><td>${r.shares.toLocaleString("en-US")}</td><td>${per(r.pnl_per_100_shares)}</td><td>${signed(r.markout_1s)}¢</td></tr>`;
+  }
+  $("t-head").innerHTML = rows;
+  $("head-note").textContent = `Latency ${lat(state.latency)}, quoting at ${state.placement === "join" ? "the best price" : "1¢ behind"}, ${actionName === "pull" ? "pulling" : "stepping back"} threatened quotes. Each filter's rate was picked as the most profitable on the 12:30–13:30 tuning hour, using models fit on the morning only; this table is the test period at that rate.` + (state.placement === "behind" ? " Rates were picked for quoting at the best price; the same rates are shown here." : "");
 }
 
 function modelPanels() {
   const m = D.model, nm = m.labels.next_move;
-  // ROC
   const { g, w, h } = canvas("c-roc");
   const pad = { l: 40, r: 10, t: 8, b: 40 };
   const { X, Y } = axes(g, w, h, pad, [0, 1], [0, 1], [0, 0.5, 1], [0, 0.5, 1], (v) => v, (v) => v);
@@ -304,17 +388,14 @@ function modelPanels() {
   line(g, m.roc.imbalance.fpr, m.roc.imbalance.tpr, X, Y, C.ask, 2);
   line(g, m.roc.gbm.fpr, m.roc.gbm.tpr, X, Y, C.bid, 2.5);
   g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("false positive rate", pad.l + (w - pad.l - pad.r) / 2, h - 12);
-  $("lg-roc").innerHTML = `<span><i style="background:${C.bid}"></i>ML model, AUC ${nm.auc.gbm.toFixed(3)}</span><span><i style="background:${C.ask}"></i>Imbalance, AUC ${nm.auc.imbalance.toFixed(3)}</span>`;
-  // AUC table
+  $("lg-roc").innerHTML = `<span><i style="background:${C.bid}"></i>Next-move model, AUC ${nm.auc.gbm.toFixed(3)}</span><span><i style="background:${C.ask}"></i>Imbalance, AUC ${nm.auc.imbalance.toFixed(3)}</span>`;
   const names = { next_move: "Next move", up_100ms: "Up in 100 ms", up_1s: "Up in 1 s" };
-  let rows = `<tr><th>Label</th><th>Imbalance</th><th>Logistic</th><th>ML model</th><th>Model − imb. (95% CI)</th></tr>`;
+  let rows = `<tr><th>Label</th><th>Imbalance</th><th>Logistic</th><th>Trees</th><th>Gain, 95% CI</th></tr>`;
   for (const [k, v] of Object.entries(m.labels)) {
-    const ci = v.ci95.gbm_minus_imbalance;
-    rows += `<tr><td>${names[k] || k}</td><td>${v.auc.imbalance.toFixed(3)}</td><td>${v.auc.logistic.toFixed(3)}</td><td><b>${v.auc.gbm.toFixed(3)}</b></td><td>${signed(v.auc.gbm - v.auc.imbalance, 3)} (${signed(ci[0], 3)} to ${signed(ci[1], 3)})</td></tr>`;
+    rows += `<tr><td>${names[k] || k}</td><td>${f3(v.auc.imbalance)}</td><td>${f3(v.auc.logistic)}</td><td><b>${f3(v.auc.gbm)}</b></td><td>${gainCi(v.auc.gbm - v.auc.imbalance, v.ci95.gbm_minus_imbalance)}</td></tr>`;
   }
   $("t-auc").innerHTML = rows;
   $("auc-note").textContent = `Test period ${m.split.test}: ${nm.test_samples.toLocaleString("en-US")} samples for the next-move label. 0.5 is a coin flip. Intervals: block bootstrap over 1-minute blocks.`;
-  // importance
   const c2 = canvas("c-imp"), imp = m.importance.slice(0, 8);
   const max = Math.max(...imp.map((r) => r.auc_drop), 1e-6), left = 118, bh = (c2.h - 10) / imp.length;
   imp.forEach((r, i) => {
@@ -325,9 +406,59 @@ function modelPanels() {
   });
 }
 
+function table(head, rows) { return `<table><tr>${head.map((x) => `<th>${x}</th>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("")}</table>`; }
+const none = (what) => `<p class="empty">${what} hasn't been run yet.</p>`;
+
+function extraPanels() {
+  const x = D.extra || {}, m = D.model;
+  // other stocks
+  const cs = x.cross_stock;
+  $("x-stocks").innerHTML = cs ? table(["Stock", "Spread", "Imbalance", "AAPL model", "Own model", "Own − imb., 95% CI"],
+    Object.entries(cs).map(([s, v]) => [s, `${v.mean_spread_cents.toFixed(1)}¢`, f3(v.auc.imbalance), f3(v.auc.aapl_model), `<b>${f3(v.auc.own_model)}</b>`, gainCi(v.auc.own_model - v.auc.imbalance, v.ci95.own_model_minus_imbalance)]))
+    + `<p class="note">AUC for the next mid move. "AAPL model" is applied unchanged; "own model" is trained on that stock with the same protocol.</p>` : none("The other-stocks study");
+  // second day
+  const d2 = x.second_day;
+  if (d2) {
+    $("d2-title").textContent = `A second day nobody tuned on (${d2.date === "d2" ? "2019-12-30" : d2.date}, all of 9:35–15:55)`;
+    const labs = { next_move: "Next move", next_move_100us: "After 100 µs", next_move_1ms: "After 1 ms", next_move_10ms: "After 10 ms" };
+    let html = table(["Label", "Imbalance", "Day-1 model", "Diff (95% CI)"], Object.entries(d2.auc).map(([k, v]) => [labs[k] || k, f3(v.auc.imbalance), `<b>${f3(v.auc.model)}</b>`, gainCi(v.auc.model - v.auc.imbalance, v.ci95.model_minus_imbalance)]));
+    const byLat = {};
+    for (const r of d2.backtest) (byLat[r.latency_us] ||= []).push(r);
+    const rows = [];
+    for (const [l, rs] of Object.entries(byLat)) for (const r of rs) if (r.action === "pull") rows.push([lat(+l), NAME[r.filter] + (r.filter === "none" ? "" : ` (${Math.round(r.pull_rate * 100)}%)`), money(r.pnl_with_rebate), r.shares.toLocaleString("en-US"), per(r.pnl_per_100_shares), signed(r.markout_1s) + "¢"]);
+    html += `<p class="note">Backtest on day 2 with every setting frozen from day 1 (join best, pull):</p>` + table(["Latency", "Filter", "PnL", "Shares", "Per 100 sh", "1 s markout"], rows);
+    $("x-day2").innerHTML = html;
+  } else $("x-day2").innerHTML = none("The second-day test");
+  // SPY
+  const sp = x.spy_features;
+  if (sp) {
+    const L = sp.labels.next_move;
+    const spyImp = (sp.importance || []).filter((r) => r.feature.startsWith("spy_")).slice(0, 3).map((r) => `${r.feature} (${r.auc_drop.toFixed(4)})`).join(", ");
+    $("x-spy").innerHTML = table(["Label", "AAPL features only", "+ SPY features", "Gain (95% CI)"], Object.entries(sp.labels).map(([k, v]) => [k === "next_move" ? "Next move" : "Up in 100 ms", f3(v.auc.aapl_only), `<b>${f3(v.auc.with_spy)}</b>`, gainCi(v.auc.with_spy - v.auc.aapl_only, v.ci95.with_spy_minus_aapl_only)]))
+      + `<p class="note">Same split and tuning; nine SPY features as of each AAPL snapshot. Most useful SPY features: ${spyImp || "–"}.</p>`;
+  } else $("x-spy").innerHTML = none("The SPY study");
+  // latency labels
+  const ll = m.latency_labels;
+  const latName = (k) => ({ next_move_100us: "100 µs", next_move_1ms: "1 ms", next_move_10ms: "10 ms" })[k] || k;
+  $("x-lat").innerHTML = ll ? table(["Latency", "Imbalance", "Next-move model", "Latency-trained", "Gain"],
+    Object.entries(ll).map(([k, v]) => [latName(k), f3(v.auc.imbalance), f3(v.auc.gbm_next_move), `<b>${f3(v.auc.gbm)}</b>`, signed(v.auc.gbm - v.auc.gbm_next_move, 3)]))
+    + `<p class="note">Test AUC for "which way is the first move after the cancel lands?" The latency-trained model drives the "latency-trained" filter.</p>` : none("Latency-aware training");
+  // toxicity
+  const tx = m.toxicity;
+  $("x-tox").innerHTML = tx ? table(["Latency", "Train fills", "AUC, losing fill", "Imbalance", "Markout ¢ by predicted fifth, worst → best"],
+    Object.entries(tx).map(([l, v]) => [lat(+l), v.train_fills.toLocaleString("en-US"), `<b>${f3(v.test_auc_bad_fill)}</b>`, f3(v.test_auc_bad_fill_imbalance), v.test_markout_by_quintile.map((q) => signed(q, 2)).join(" ")]))
+    + `<p class="note">Scored on the plain market maker's test-period fills: how well it ranks fills that lose money over the next second.</p>` : none("The toxicity model");
+  // C++
+  const cp = x.cpp_inference, tr = x.cpp_tradeoff;
+  let html = cp ? `<p class="prose" style="margin:0">All 19 features and the trees run in C++ on the same book. Over ${cp.decisions.toLocaleString("en-US")} decisions in a full-day replay the C++ features are <b>bit-identical</b> to Python's and the probabilities match exactly. Updating the features costs <b>${Math.round(cp.features_ns_per_decision)} ns</b> per decision; the tuned model (${cp.trees} trees, depth up to ${cp.max_depth}) costs ${(cp.predict_loop_ns / 1000).toFixed(1)} µs to score.</p>` : none("The C++ port");
+  if (tr) html += `<p class="note">Smaller models, same split, timed in C++ (predict-only loop over the day's decisions):</p>` + table(["Model", "Test AUC", "ns / prediction", "p99 single call"],
+    tr.rows.map((r) => [r.label, r.auc >= tr.rows[0].auc - 0.0015 ? `<b>${f3(r.auc)}</b>` : f3(r.auc), Math.round(r.predict_ns).toLocaleString("en-US"), Math.round(r.p99_ns).toLocaleString("en-US")]).concat([["Imbalance alone", f3(tr.imbalance_auc), "–", "–"]]));
+  $("x-cpp").innerHTML = html;
+}
+
 fetch("playground_data.json").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
   .then((d) => { D = d; setup(); })
-  .catch((e) => { $("err").style.display = "block"; $("err").textContent = "Couldn't load playground_data.json (" + e.message + "). Run backtest/ml_signal.py and backtest/ml_backtest.py to generate it."; });
+  .catch((e) => { $("err").style.display = "block"; $("err").textContent = "Couldn't load playground_data.json (" + e.message + "). Run backtest/ml_signal.py and backtest/ml_backtest.py to generate it."; console.error(e); });
 </script>
 </body>
 </html>

@@ -103,6 +103,52 @@ class ModelFilter(unittest.TestCase):
             run(stream(*self.ROWS), Strategy("m", model_pull=0.1))
 
 
+class LatencyLabels(unittest.TestCase):
+    def test_only_moves_after_the_latency_count(self):
+        rows = [(T, "A", 1, "B", 100, px(100.00)), (T, "A", 2, "S", 100, px(100.02)),
+                (T + 50_000, "A", 3, "B", 100, px(100.01)),       # up 50 us later
+                (T + 3_000_000, "E", 3, "B", 100, px(100.01))]    # down 3 ms later
+        f = features_and_labels(snapshots(stream(*rows))[0]).set_index("ts_ns")
+        self.assertEqual(f.loc[T, "next_move"], 1.0)         # can't dodge a move 50 us away...
+        self.assertEqual(f.loc[T, "next_move_100us"], 0.0)   # ...so the 100 us label is the move after it
+        self.assertEqual(f.loc[T, "next_move_1ms"], 0.0)
+        self.assertTrue(np.isnan(f.loc[T, "next_move_10ms"]))
+
+
+class CppParity(unittest.TestCase):
+    """The C++ features + tree evaluation (cpp/ml) must match the Python pipeline."""
+
+    def test_cpp_matches_python(self):
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        from sklearn.ensemble import HistGradientBoostingClassifier
+
+        from export_model import export
+        from ml_signal import build
+
+        exe = Path(__file__).resolve().parents[1] / "cpp" / "build" / "ml_replay"
+        if not exe.exists():
+            self.skipTest("cpp/build/ml_replay not built (make -C cpp ml)")
+        with tempfile.TemporaryDirectory() as d:
+            csv, model_path, dump = Path(d) / "ev.csv", Path(d) / "m.gbdt", Path(d) / "dump.bin"
+            generate(minutes=8, seed=5, start_ns=QUOTE_START - 60 * NS).to_csv(csv, index=False)
+            _, f, _ = build(str(csv))
+            f = f.dropna(subset=["next_move"])
+            X = f[FEATURES].to_numpy(float)
+            m = HistGradientBoostingClassifier(max_iter=40, max_leaf_nodes=15, random_state=0).fit(X, f["next_move"].astype(int))
+            export(m, model_path, len(FEATURES))
+            subprocess.run([str(exe), str(csv), str(model_path), "--dump", str(dump), "--repeat", "1"],
+                           check=True, capture_output=True)
+            got = np.fromfile(dump, dtype=np.float64).reshape(-1, len(FEATURES) + 2)
+            _, full, _ = build(str(csv))
+            self.assertEqual(len(got), len(full))
+            np.testing.assert_array_equal(got[:, 0].astype(np.int64), full["ts_ns"].to_numpy())
+            np.testing.assert_array_equal(got[:, 1:-1], full[FEATURES].to_numpy(float))  # bit-identical
+            np.testing.assert_allclose(got[:, -1], m.predict_proba(full[FEATURES].to_numpy(float))[:, 1], rtol=0, atol=1e-12)
+
+
 class Auc(unittest.TestCase):
     def test_matches_sklearn_with_ties(self):
         rng = np.random.default_rng(0)

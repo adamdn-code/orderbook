@@ -50,9 +50,18 @@ python -m unittest -v        # all tests
 ![Markouts on real AAPL fills](backtest/results/real/markouts.png)
 
 ## Predicting the next price move (ML)
-`backtest/ml_signal.py` trains gradient-boosted trees on 19 causal order-flow features (order-flow imbalance, signed trade flow, depth imbalance, queue sizes, recent moves) to predict whether AAPL's next mid-price move is up or down. With a chronological split and a held-out afternoon, test **AUC is 0.652 against 0.603 for the order-book imbalance baseline** (+0.048, 95% block-bootstrap CI +0.041 to +0.054), higher in every half hour of the test period. Used as a quote filter in the shadow-order backtest, with thresholds matched so both signals pull quotes equally often, the model loses less per share than imbalance in all 24 settings tried. At zero latency it turns the afternoon from −$1,147 to +$160. Its edge shrinks as latency grows, because the thing it predicts happens within milliseconds. See `backtest/README.md` and the [playground](https://adamdn-code.github.io/orderbook/playground.html).
+`backtest/ml_signal.py` trains gradient-boosted trees on 19 causal order-flow features to predict AAPL's next mid-price move:
+- **Prediction:** with a chronological split and a held-out afternoon, test **AUC is 0.652 against 0.603 for order-book imbalance** (+0.048, 95% block-bootstrap CI +0.041 to +0.054).
+- **Other stocks:** the same recipe beats imbalance on MSFT, INTC, SPY, NVDA and AMZN, but a model fitted on AAPL doesn't transfer to one-tick stocks.
+- **Latency:** a latency-aware version (predict the first move after your cancel can land) helps when you're slow.
+- **Fills:** a second model trained on the market maker's own fills ranks toxic fills.
+- **Backtest:** as quote filters with matched activity, the ML filters lose less per share than imbalance in 126 of 132 settings. With activity rates picked on a tuning hour before touching the test afternoon, the best ML filter cuts the loss by 60–76% against quoting blindly, though nothing turns profitable.
+- **SPY:** SPY lead-lag features added nothing.
+- **C++:** features and trees run in C++ with bit-identical output to Python. A 50-tree model keeps nearly all of the AUC (0.650 vs 0.652) at **405 ns per prediction**.
 
-![Loss per share at matched pull rates](backtest/results/ml/filters.png)
+See `backtest/README.md` and the [playground](https://adamdn-code.github.io/orderbook/playground.html).
+
+![Loss per share at matched activity](backtest/results/ml/filters.png)
 
 ## Python bindings and market-making backtest
 `backtest/` drives the C++ book from Python through `obfast`, a CPython extension module (12.9× faster than the pure-Python book on the same orders). It uses it to backtest a market-making strategy against simulated informed and uninformed order flow, sweeping quote width and inventory skew. Inventory skew cut drawdowns 7–11× and raised risk-adjusted return about 4×. See `backtest/README.md`.
