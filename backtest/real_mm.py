@@ -63,6 +63,10 @@ class Strategy:
     # would fill just before the price moves through. Pull our quote there while the real size
     # at that best price is below this many shares.
     min_level_shares: int = 0  # 0 = off
+    # Signal: a model's probability that the next mid move is up (ml_signal.py), passed to run() as
+    # one value per event. Pull the ask while p_up > 0.5 + model_pull (the price is about to rise
+    # through it) and the bid while p_up < 0.5 - model_pull.
+    model_pull: float = 0.0  # 0 = off
 
 
 @dataclass
@@ -98,8 +102,10 @@ class Events:
 
 
 class ShadowMaker:
-    def __init__(self, strat: Strategy):
+    def __init__(self, strat: Strategy, window: tuple[int, int] = (QUOTE_START, QUOTE_END)):
         self.s = strat
+        self.window = window
+        self.p_up = float("nan")  # model signal at the current event (NaN = no opinion)
         self.inventory = 0
         self.cash = 0.0  # dollars
         self.rebates = 0.0
@@ -160,7 +166,7 @@ class ShadowMaker:
     # ---------- quoting ----------
     def targets(self, book: "obfast.Book", ts: int) -> dict[int, int | None]:
         best_bid, best_ask = book.best_bid(), book.best_ask()
-        if not (QUOTE_START <= ts < QUOTE_END) or best_bid is None or best_ask is None:
+        if not (self.window[0] <= ts < self.window[1]) or best_bid is None or best_ask is None:
             return {BUY: None, SELL: None}
         s, inv = self.s, self.inventory
         pull_bid = pull_ask = False
@@ -172,6 +178,9 @@ class ShadowMaker:
             if s.min_level_shares:
                 pull_bid = pull_bid or bq < s.min_level_shares
                 pull_ask = pull_ask or aq < s.min_level_shares
+        if s.model_pull and self.p_up == self.p_up:  # not NaN
+            pull_ask = pull_ask or self.p_up > 0.5 + s.model_pull
+            pull_bid = pull_bid or self.p_up < 0.5 - s.model_pull
         skew = (abs(inv) // s.skew_step) if s.skew_step else 0
         bid = best_bid - s.back_ticks - (skew if inv > 0 else 0)
         ask = best_ask + s.back_ticks + (skew if inv < 0 else 0)
@@ -217,14 +226,22 @@ class ShadowMaker:
                 self.quotes[q.side] = q
 
 
-def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
-    """Replay the day once with one strategy. Returns (summary, timeline DataFrame, fills DataFrame, mids)."""
+def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS, signal=None,
+        window: tuple[int, int] = (QUOTE_START, QUOTE_END)):
+    """Replay the day once with one strategy. Returns (summary, timeline DataFrame, fills DataFrame, mids).
+
+    `signal` (needed when strat.model_pull is set) holds P(next mid move up) as known at each event,
+    see ml_signal.event_signal. `window` is when the market maker quotes; the whole day is still
+    replayed so the book is right when quoting starts."""
+    if strat.model_pull and signal is None:
+        raise ValueError("model_pull needs a per-event signal")
     book = obfast.Book()
-    mm = ShadowMaker(strat)
+    mm = ShadowMaker(strat, window)
+    sig = signal.tolist() if signal is not None else None
     mid_t: list[int] = []
     mid_v: list[float] = []
     rows = []
-    next_record = QUOTE_START
+    next_record = window[0]
     last_bb = last_ba = None
     close_price = None
     unexpected_trades = 0
@@ -244,6 +261,8 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
     for i in range(events.n):
         ts, typ, ref, side, shares, px = ts_l[i], typ_l[i], ref_l[i], side_l[i], sh_l[i], px_l[i]
         mm.apply_pending(book, ts)
+        if sig is not None:
+            mm.p_up = sig[i]
         price_c = px // 100
         removed = 0
         new_price = None
@@ -290,11 +309,11 @@ def run(events: Events, strat: Strategy, record_every_ns: int = 10 * NS):
                 mid_t.append(ts)
                 mid_v.append((bb + ba) / 2)
             mm.requote(book, ts)
-        elif strat.imbalance_pull or strat.min_level_shares or mm.quotes[BUY] is None or mm.quotes[SELL] is None:
+        elif strat.imbalance_pull or strat.min_level_shares or strat.model_pull or mm.quotes[BUY] is None or mm.quotes[SELL] is None:
             mm.requote(book, ts)  # the signal can change without the best prices changing
         if ts >= next_record and mid_v:
             next_record = (ts // record_every_ns + 1) * record_every_ns
-            if QUOTE_START <= ts <= QUOTE_END + 5 * 60 * NS:
+            if window[0] <= ts <= window[1] + 5 * 60 * NS:
                 m = mid_v[-1] / 100
                 rows.append({"ts_ns": ts, "mid": m, "inventory": mm.inventory,
                              "pnl": mm.cash + mm.inventory * m, "pnl_with_rebate": mm.cash + mm.inventory * m + mm.rebates})

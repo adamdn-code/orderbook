@@ -47,7 +47,7 @@ jobs:
       - name: Pure-Python order book and engine
         run: python -m unittest -v test_orderbook test_engine
       - name: Install backtest dependencies
-        run: pip install numpy pandas matplotlib
+        run: pip install numpy pandas matplotlib scikit-learn
       - name: Build obfast (C++ book as a Python module)
         run: make -C cpp python
       - name: Binding and backtest tests

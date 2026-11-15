@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market-Making Strategy Playground · AAPL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0e1a2b; --panel: #142339; --line: #233650; --text: #dde6f1; --muted: #8a9bb4;
+  --bid: #4cb5df; --ask: #efa54b; --good: #5cc79a; --bad: #e86a5a; --grey: #8a9bb4;
+  --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+body { padding: 20px clamp(16px, 3vw, 40px) 40px; max-width: 1440px; margin: 0 auto; }
+a { color: var(--bid); }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ask); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.top { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 44px); letter-spacing: 0.01em; line-height: 1; margin: 0; text-wrap: balance; }
+h1 .sym { color: var(--ask); }
+.sub { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+.links { display: flex; gap: 18px; font-weight: 500; white-space: nowrap; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; margin: 0 0 10px; }
+.board { margin-top: 18px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.cell { background: var(--panel); padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.label { color: var(--muted); font-size: 12.5px; }
+.big { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 3.2vw, 46px); line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.controls { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px 26px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; }
+.ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13.5px; color: var(--text); background: var(--ink); border: 0; border-right: 1px solid var(--line); padding: 6px 12px; cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--ask); color: var(--ink); font-weight: 600; }
+input[type=range] { accent-color: var(--ask); width: 160px; }
+input[type=range]:disabled { opacity: 0.35; }
+#pullv { min-width: 3.2em; color: var(--text); font-variant-numeric: tabular-nums; }
+.grid2 { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+.grid3 { margin-top: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.plot { position: relative; height: 280px; }
+.plot.short { height: 240px; }
+.plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 500; }
+.verdict { font-size: 15px; margin: 0; }
+.prose p { margin: 0 0 8px; color: var(--text); }
+.prose li { margin-bottom: 4px; }
+.prose { font-size: 14px; }
+#err { display: none; margin-top: 20px; padding: 14px 16px; border: 1px solid var(--bad); border-radius: 6px; }
+@media (max-width: 980px) {
+  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Market-making <span class="sym">playground</span></h1>
+    <p class="sub" id="sub">A market maker quoting AAPL on real Nasdaq order flow, with a machine-learning filter that pulls quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.</p>
+  </div>
+  <nav class="links"><a href="index.html">Order book replay</a><a href="https://github.com/adamdn-code/orderbook">Source on GitHub</a></nav>
+</header>
+
+<div id="err"></div>
+
+<section class="controls" aria-label="Strategy settings">
+  <div class="ctl">Filter
+    <span class="seg" id="filter">
+      <button data-v="none">None</button><button data-v="imbalance">Imbalance</button><button data-v="model" aria-pressed="true">ML model</button>
+    </span>
+  </div>
+  <div class="ctl"><label for="pull">Pull quotes</label>
+    <input type="range" id="pull" min="0" max="5" step="1" value="2"><span id="pullv"></span><span>of the time</span>
+  </div>
+  <div class="ctl">Latency <span class="seg" id="latency"></span></div>
+  <div class="ctl">Quote at <span class="seg" id="placement">
+      <button data-v="join" aria-pressed="true">Best price</button><button data-v="behind">1¢ behind</button></span>
+  </div>
+</section>
+
+<section class="board" aria-label="Selected strategy, test period" aria-live="polite">
+  <div class="cell"><span class="label">PnL with rebate</span><span class="big" id="b-pnl">–</span><span class="delta" id="d-pnl"></span></div>
+  <div class="cell"><span class="label">Shares traded</span><span class="big" id="b-shares">–</span><span class="delta" id="d-shares"></span></div>
+  <div class="cell"><span class="label">PnL per 100 shares</span><span class="big" id="b-per">–</span><span class="delta" id="d-per"></span></div>
+  <div class="cell"><span class="label">1 s markout (¢/share)</span><span class="big" id="b-mk">–</span><span class="delta" id="d-mk"></span></div>
+  <div class="cell"><span class="label">Max inventory</span><span class="big" id="b-inv">–</span><span class="delta" id="d-inv"></span></div>
+</section>
+
+<section class="grid2">
+  <div class="box">
+    <h2>PnL through the afternoon</h2>
+    <div class="plot"><canvas id="c-pnl" role="img" aria-label="PnL over time for the selected strategy, no filter, and the other signal"></canvas></div>
+    <div class="legend" id="lg-pnl"></div>
+  </div>
+  <div class="box">
+    <h2>Edge, not just less trading</h2>
+    <div class="plot"><canvas id="c-front" role="img" aria-label="PnL per 100 shares against shares traded for each filter"></canvas></div>
+    <div class="legend"><span><i style="background:var(--bid)"></i>ML model</span><span><i style="background:var(--ask)"></i>Imbalance</span><span><i style="background:var(--grey)"></i>No filter</span></div>
+    <p class="note">Each point is one pull rate (10–60%). Both filters trade less as they pull more; a filter only adds edge if its line sits <em>above</em> the other at the same volume.</p>
+  </div>
+</section>
+
+<section class="grid3">
+  <div class="box">
+    <h2>How good is the model?</h2>
+    <div class="plot short"><canvas id="c-roc" role="img" aria-label="ROC curves for the model and the imbalance baseline"></canvas></div>
+    <div class="legend" id="lg-roc"></div>
+  </div>
+  <div class="box">
+    <h2>Test AUC by label</h2>
+    <table id="t-auc"></table>
+    <p class="note" id="auc-note"></p>
+  </div>
+  <div class="box">
+    <h2>What it looks at</h2>
+    <div class="plot short"><canvas id="c-imp" role="img" aria-label="Permutation importance of the top features"></canvas></div>
+    <p class="note">AUC lost on the test period when each feature is shuffled.</p>
+  </div>
+</section>
+
+<section class="grid2">
+  <div class="box prose">
+    <h2>How this was built</h2>
+    <p><b>Model.</b> Gradient-boosted trees predict whether AAPL's next mid-price move is up or down, from order-flow features computed only from events up to that moment: depth imbalance at 1, 2 and 5 levels, order-flow imbalance over 100 ms, 1 s and 10 s, signed trade volume, recent returns and activity. One sample per timestamp, taken after a whole sweep has been applied.</p>
+    <p><b>Honest split.</b> Train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55 (including the 2 pm Fed announcement), with a 60 s embargo at each boundary. No shuffling. The test period is used once, and everything on this page comes from it.</p>
+    <p><b>Backtest.</b> Quotes are shadow orders whose queue position is tracked exactly from Nasdaq's order-level feed, with place/cancel latency and a $0.0020/share rebate. The filter pulls the ask while the model expects an up-move (and the bid for a down-move).</p>
+    <p><b>Fair comparison.</b> The imbalance and model thresholds are set so each filter is active the same share of the time on the tuning period. Pulling more always means trading less, so the right question is loss <em>per share</em> at equal pull rates.</p>
+  </div>
+  <div class="box prose">
+    <h2>Limits</h2>
+    <ul>
+      <li>One stock, one day, one test afternoon. The AUC intervals (block bootstrap over 1-minute blocks) cover sampling noise inside that afternoon, not other days.</li>
+      <li>Shadow orders have no market impact, so fill counts are on the high side.</li>
+      <li>The rebate is assumed; auction and hidden-order fills are not modelled.</li>
+      <li>The model is scored on the next move's direction, not its timing. A correct prediction can still arrive after the quote is hit.</li>
+    </ul>
+  </div>
+</section>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const C = { bid: css("--bid"), ask: css("--ask"), grey: css("--grey"), line: css("--line"), muted: css("--muted"), text: css("--text") };
+const COLOR = { model: C.bid, imbalance: C.ask, none: C.grey };
+const NAME = { model: "ML model", imbalance: "Imbalance", none: "No filter" };
+const state = { filter: "model", pull: 2, latency: 100, placement: "join" };
+let D, index;
+
+const money = (v) => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
+const signed = (v, d = 2) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d);
+const lat = (us) => us === 0 ? "0" : us >= 1000 ? `${us / 1000} ms` : `${us} µs`;
+const hhmm = (s) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}`;
+
+function key(f, rate, latency, placement) { return `${f}|${f === "none" ? 0 : rate}|${latency}|${placement}`; }
+function get(f, pullIdx, s = state) { return index.get(key(f, f === "none" ? 0 : D.meta.pull_rates[pullIdx], s.latency, s.placement)); }
+
+function seg(id, onPick) {
+  $(id).addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    for (const x of $(id).children) x.setAttribute("aria-pressed", x === b ? "true" : "false");
+    onPick(b.dataset.v); render();
+  });
+}
+
+function setup() {
+  index = new Map(D.runs.map((r) => [key(r.filter, r.pull_rate, r.latency_us, r.placement), r]));
+  const lats = D.meta.latencies_us.filter((l) => D.runs.some((r) => r.latency_us === l));
+  if (!lats.includes(state.latency)) state.latency = lats[0];
+  $("latency").innerHTML = lats.map((l) => `<button data-v="${l}" aria-pressed="${l === state.latency}">${lat(l)}</button>`).join("");
+  const places = D.meta.placements.filter((p) => D.runs.some((r) => r.placement === p));
+  for (const b of $("placement").children) if (!places.includes(b.dataset.v)) b.disabled = true;
+  $("pull").max = D.meta.pull_rates.length - 1;
+  seg("filter", (v) => (state.filter = v));
+  seg("latency", (v) => (state.latency = +v));
+  seg("placement", (v) => (state.placement = v));
+  $("pull").addEventListener("input", (e) => { state.pull = +e.target.value; render(); });
+  $("sub").textContent = `A market maker quoting ${D.meta.symbol} on real Nasdaq order flow (${D.meta.date}, ${D.meta.window}), with a machine-learning filter that pulls quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.`;
+  modelPanels();
+  render();
+  window.addEventListener("resize", () => { render(); modelPanels(); });
+}
+
+function setBoard(id, text, delta, better) {
+  $("b-" + id).textContent = text;
+  const d = $("d-" + id);
+  d.textContent = delta ?? "";
+  d.className = "delta" + (better == null ? "" : better ? " pos" : " neg");
+}
+
+function render() {
+  $("pullv").textContent = Math.round(D.meta.pull_rates[state.pull] * 100) + "%";
+  $("pull").disabled = state.filter === "none";
+  const r = get(state.filter, state.pull), base = get("none", 0);
+  if (!r || !base) return;
+  const vs = state.filter === "none" ? null : "vs no filter";
+  const dp = r.pnl_with_rebate - base.pnl_with_rebate;
+  setBoard("pnl", money(r.pnl_with_rebate), vs && `${dp >= 0 ? "+" : "−"}${money(Math.abs(dp)).replace("−", "")} ${vs}`, vs && dp >= 0);
+  setBoard("shares", r.shares.toLocaleString("en-US"), vs && `${Math.round((r.shares / base.shares - 1) * 100)}% ${vs}`, null);
+  const dper = r.pnl_per_100_shares - base.pnl_per_100_shares;
+  setBoard("per", (r.pnl_per_100_shares < 0 ? "−$" : "$") + Math.abs(r.pnl_per_100_shares).toFixed(3), vs && `${signed(dper, 3)} ${vs}`, vs && dper >= 0);
+  const dmk = r["markout_1s"] - base["markout_1s"];
+  setBoard("mk", signed(r["markout_1s"]), vs && `${signed(dmk)} ${vs}`, vs && dmk >= 0);
+  setBoard("inv", r.max_abs_inventory.toLocaleString("en-US"), vs && `${base.max_abs_inventory.toLocaleString("en-US")} with no filter`, null);
+  pnlChart(r, base);
+  frontier(r);
+}
+
+// ---------------------------------------------------------------- canvas helpers
+function canvas(id) {
+  const c = $(id), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  g.font = `12px ${css("--body")}`;
+  return { g, w, h };
+}
+function axes(g, w, h, pad, xr, yr, xt, yt, fmtx, fmty) {
+  const X = (v) => pad.l + (v - xr[0]) / (xr[1] - xr[0]) * (w - pad.l - pad.r);
+  const Y = (v) => h - pad.b - (v - yr[0]) / (yr[1] - yr[0]) * (h - pad.t - pad.b);
+  g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1;
+  for (const v of yt) { g.beginPath(); g.moveTo(pad.l, Y(v)); g.lineTo(w - pad.r, Y(v)); g.stroke(); g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(fmty(v), pad.l - 6, Y(v)); }
+  for (const v of xt) { g.textAlign = "center"; g.textBaseline = "top"; g.fillText(fmtx(v), X(v), h - pad.b + 6); }
+  return { X, Y };
+}
+function ticks(lo, hi, n = 5) {
+  const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0 || 1));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= step0) || step0;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function range(vals, padFrac = 0.08) {
+  let lo = Math.min(...vals), hi = Math.max(...vals); if (lo === hi) { lo -= 1; hi += 1; }
+  const p = (hi - lo) * padFrac; return [lo - p, hi + p];
+}
+function line(g, xs, ys, X, Y, color, width = 2, dash = []) {
+  g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash); g.beginPath();
+  xs.forEach((x, i) => (i ? g.lineTo(X(x), Y(ys[i])) : g.moveTo(X(x), Y(ys[i])))); g.stroke(); g.setLineDash([]);
+}
+
+function pnlChart(r, base) {
+  const { g, w, h } = canvas("c-pnl");
+  const t = D.mid.t;
+  const other = state.filter === "model" ? "imbalance" : state.filter === "imbalance" ? "model" : null;
+  const o = other && get(other, state.pull);
+  const series = [[base, "none", [5, 4], 1.5]];
+  if (o) series.push([o, other, [], 1.5]);
+  if (state.filter !== "none") series.push([r, state.filter, [], 2.5]);
+  const n = Math.min(t.length, ...series.map((s) => s[0].series.pnl.length));
+  const all = series.flatMap((s) => s[0].series.pnl.slice(0, n)).concat([0]);
+  const yr = range(all), xr = [t[0], t[n - 1]];
+  const pad = { l: 64, r: 12, t: 10, b: 24 };
+  const hourTicks = []; for (let s = Math.ceil(xr[0] / 1800) * 1800; s <= xr[1]; s += 1800) hourTicks.push(s);
+  const { X, Y } = axes(g, w, h, pad, xr, yr, hourTicks, ticks(yr[0], yr[1]), hhmm, money);
+  g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
+  const fed = 14 * 3600; if (fed > xr[0] && fed < xr[1]) {
+    g.strokeStyle = C.ask; g.globalAlpha = 0.4; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(X(fed), pad.t); g.lineTo(X(fed), h - pad.b); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    g.fillStyle = C.ask; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("Fed 2:00 pm", X(fed) + 4, pad.t);
+  }
+  for (const [run, f, dash, wd] of series) line(g, t.slice(0, n), run.series.pnl.slice(0, n), X, Y, COLOR[f], wd, dash);
+  const rate = Math.round(D.meta.pull_rates[state.pull] * 100);
+  $("lg-pnl").innerHTML = series.map(([run, f, dash]) => `<span><i style="background:${COLOR[f]}${dash.length ? ";opacity:.7" : ""}"></i>${NAME[f]}${f === "none" ? "" : ` (pull ${rate}%)`}: ${money(run.pnl_with_rebate)}</span>`).join("");
+}
+
+function frontier(sel) {
+  const { g, w, h } = canvas("c-front");
+  const pts = {};
+  for (const f of ["imbalance", "model"]) pts[f] = D.meta.pull_rates.map((_, i) => get(f, i)).filter(Boolean);
+  const base = get("none", 0);
+  const all = [...pts.imbalance, ...pts.model, base];
+  const xr = range(all.map((r) => r.shares / 1000)), yr = range(all.map((r) => r.pnl_per_100_shares).concat([0]));
+  const pad = { l: 56, r: 12, t: 10, b: 36 };
+  const { X, Y } = axes(g, w, h, pad, xr, yr, ticks(xr[0], xr[1], 4), ticks(yr[0], yr[1]), (v) => v + "k", (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(2));
+  g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("shares traded", pad.l + (w - pad.l - pad.r) / 2, h - 14);
+  g.strokeStyle = C.muted; g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
+  for (const f of ["imbalance", "model"]) {
+    const p = pts[f]; line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR[f], 2);
+    for (const r of p) { g.fillStyle = COLOR[f]; g.beginPath(); g.arc(X(r.shares / 1000), Y(r.pnl_per_100_shares), 3.5, 0, 7); g.fill(); }
+  }
+  g.fillStyle = C.grey; g.beginPath(); g.arc(X(base.shares / 1000), Y(base.pnl_per_100_shares), 5, 0, 7); g.fill();
+  g.strokeStyle = C.text; g.lineWidth = 2; g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 8, 0, 7); g.stroke();
+}
+
+function modelPanels() {
+  const m = D.model, nm = m.labels.next_move;
+  // ROC
+  const { g, w, h } = canvas("c-roc");
+  const pad = { l: 40, r: 10, t: 8, b: 40 };
+  const { X, Y } = axes(g, w, h, pad, [0, 1], [0, 1], [0, 0.5, 1], [0, 0.5, 1], (v) => v, (v) => v);
+  line(g, [0, 1], [0, 1], X, Y, C.muted, 1, [4, 4]);
+  line(g, m.roc.imbalance.fpr, m.roc.imbalance.tpr, X, Y, C.ask, 2);
+  line(g, m.roc.gbm.fpr, m.roc.gbm.tpr, X, Y, C.bid, 2.5);
+  g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("false positive rate", pad.l + (w - pad.l - pad.r) / 2, h - 12);
+  $("lg-roc").innerHTML = `<span><i style="background:${C.bid}"></i>ML model, AUC ${nm.auc.gbm.toFixed(3)}</span><span><i style="background:${C.ask}"></i>Imbalance, AUC ${nm.auc.imbalance.toFixed(3)}</span>`;
+  // AUC table
+  const names = { next_move: "Next move", up_100ms: "Up in 100 ms", up_1s: "Up in 1 s" };
+  let rows = `<tr><th>Label</th><th>Imbalance</th><th>Logistic</th><th>ML model</th><th>Model − imb. (95% CI)</th></tr>`;
+  for (const [k, v] of Object.entries(m.labels)) {
+    const ci = v.ci95.gbm_minus_imbalance;
+    rows += `<tr><td>${names[k] || k}</td><td>${v.auc.imbalance.toFixed(3)}</td><td>${v.auc.logistic.toFixed(3)}</td><td><b>${v.auc.gbm.toFixed(3)}</b></td><td>${signed(v.auc.gbm - v.auc.imbalance, 3)} (${signed(ci[0], 3)} to ${signed(ci[1], 3)})</td></tr>`;
+  }
+  $("t-auc").innerHTML = rows;
+  $("auc-note").textContent = `Test period ${m.split.test}: ${nm.test_samples.toLocaleString("en-US")} samples for the next-move label. 0.5 is a coin flip. Intervals: block bootstrap over 1-minute blocks.`;
+  // importance
+  const c2 = canvas("c-imp"), imp = m.importance.slice(0, 8);
+  const max = Math.max(...imp.map((r) => r.auc_drop), 1e-6), left = 118, bh = (c2.h - 10) / imp.length;
+  imp.forEach((r, i) => {
+    const y = 4 + i * bh, wbar = Math.max(1, (c2.w - left - 54) * Math.max(0, r.auc_drop) / max);
+    c2.g.fillStyle = C.muted; c2.g.textAlign = "right"; c2.g.textBaseline = "middle"; c2.g.fillText(r.feature, left - 8, y + bh / 2);
+    c2.g.fillStyle = C.bid; c2.g.fillRect(left, y + bh * 0.2, wbar, bh * 0.6);
+    c2.g.fillStyle = C.text; c2.g.textAlign = "left"; c2.g.fillText(r.auc_drop.toFixed(4), left + wbar + 6, y + bh / 2);
+  });
+}
+
+fetch("playground_data.json").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((d) => { D = d; setup(); })
+  .catch((e) => { $("err").style.display = "block"; $("err").textContent = "Couldn't load playground_data.json (" + e.message + "). Run backtest/ml_signal.py and backtest/ml_backtest.py to generate it."; });
+</script>
+</body>
+</html>

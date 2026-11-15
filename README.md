@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml/badge.svg)](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml)
 
-**[Live demo: replay Apple's order book on 2019-01-30](https://adamdn-code.github.io/orderbook/)**, rebuilt from 368M raw Nasdaq messages.
+**[Live demo: replay Apple's order book on 2019-01-30](https://adamdn-code.github.io/orderbook/)**, rebuilt from 368M raw Nasdaq messages. **[Strategy playground](https://adamdn-code.github.io/orderbook/playground.html)**: market-make AAPL with an ML quote filter and see every setting's real backtest.
 
 A single-threaded limit order book in Python with price-time priority, like the matching engine an exchange runs. No dependencies.
 
@@ -48,6 +48,11 @@ python -m unittest -v        # all tests
 `backtest/real_mm.py` runs a market maker against all 1.67M of Apple's order events on 2019-01-30, with quotes as shadow orders whose queue position is tracked exactly from the order-level feed. Quoting at the best bid and ask all day **loses money**. Fills average 0.6¢ better than the mid, but within 0.1 s the mid has moved about 1¢ against them (adverse selection). Every step slower, from 0 to 100 ms, loses more: −$2.7k to −$10.9k for the day. Pulling quotes when the book is lopsided cuts the loss by about 70%, but by trading less, not by trading better. See `backtest/README.md`.
 
 ![Markouts on real AAPL fills](backtest/results/real/markouts.png)
+
+## Predicting the next price move (ML)
+`backtest/ml_signal.py` trains gradient-boosted trees on 19 causal order-flow features (order-flow imbalance, signed trade flow, depth imbalance, queue sizes, recent moves) to predict whether AAPL's next mid-price move is up or down. With a chronological split and a held-out afternoon, test **AUC is 0.652 against 0.603 for the order-book imbalance baseline** (+0.048, 95% block-bootstrap CI +0.041 to +0.054), higher in every half hour of the test period. Used as a quote filter in the shadow-order backtest, with thresholds matched so both signals pull quotes equally often, the model loses less per share than imbalance in all 24 settings tried. At zero latency it turns the afternoon from −$1,147 to +$160. Its edge shrinks as latency grows, because the thing it predicts happens within milliseconds. See `backtest/README.md` and the [playground](https://adamdn-code.github.io/orderbook/playground.html).
+
+![Loss per share at matched pull rates](backtest/results/ml/filters.png)
 
 ## Python bindings and market-making backtest
 `backtest/` drives the C++ book from Python through `obfast`, a CPython extension module (12.9× faster than the pure-Python book on the same orders). It uses it to backtest a market-making strategy against simulated informed and uninformed order flow, sweeping quote width and inventory skew. Inventory skew cut drawdowns 7–11× and raised risk-adjusted return about 4×. See `backtest/README.md`.

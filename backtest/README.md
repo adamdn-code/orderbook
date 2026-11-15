@@ -8,9 +8,10 @@ make -C cpp python                         # build obfast (needs: sudo apt insta
 python backtest/run_backtest.py            # 24-setting sweep, ~20 s; writes backtest/results/
 python backtest/bench_bindings.py          # pure-Python book vs C++ book, same orders
 python backtest/real_mm.py ~/itch/AAPL_events.csv   # real-data study (see below for getting the file)
-python -m unittest discover -s backtest -v # binding + backtest tests
+python backtest/ml_signal.py ~/itch/AAPL_events.csv     # ML signal (see below), then ml_backtest.py
+python -m unittest discover -s backtest -v # binding + backtest + ML tests
 ```
-Needs `numpy`, `pandas` and `matplotlib`.
+Needs `numpy`, `pandas` and `matplotlib` (plus `scikit-learn` for the ML signal).
 
 ## The bindings
 `cpp/bindings/obfast.cpp` exposes the C++ book to Python through the CPython C API directly, with no pybind11 or other dependency. The order methods use `METH_FASTCALL`, so a call costs little more than the C++ work, and C++ exceptions become Python exceptions (`obfast.OrderBookError` is a `ValueError`).
@@ -107,6 +108,54 @@ The worst fills, at twice the loss of the others, are quotes that landed *alone*
 ./cpp/build/itch_replay ~/itch/01302019.NASDAQ_ITCH50.gz --symbols AAPL --track AAPL --events --out ~/itch
 python backtest/real_mm.py ~/itch/AAPL_events.csv     # ~1 min; writes backtest/results/real/
 ```
+
+## An ML signal: predicting the next move from order flow (`ml_signal.py`, `ml_backtest.py`)
+
+The study above ends on an open problem: quotes get picked off because they're stale, and top-of-book imbalance alone doesn't predict the move well enough to avoid it. So the next step is a model that does, graded two ways: AUC against the imbalance baseline, and then dollars in the backtest.
+
+```bash
+python backtest/ml_signal.py   ~/itch/AAPL_events.csv   # features, labels, training, AUC (~6 min); writes results/ml/
+python backtest/ml_backtest.py ~/itch/AAPL_events.csv   # 104 backtests with the model as a quote filter (~3 min)
+```
+Also needs `scikit-learn`. The second script writes `docs/playground_data.json` for the **[interactive playground](https://adamdn-code.github.io/orderbook/playground.html)**.
+
+**Setup**
+- *Samples:* one per timestamp after all its events are applied (1.44M), so features never see half of a sweep.
+- *Label:* is the next mid-price change up or down? Also checked: up or down 100 ms and 1 s later.
+- *Features (19, all causal):* spread; depth imbalance at 1, 2 and 5 levels; log sizes at the touch; microprice offset; order-flow imbalance (Cont, Kukanov & Stoikov) over 100 ms, 1 s and 10 s; signed trade volume and trade counts over 1 s and 10 s; mid change over 1 s and 10 s; time since the last move and its direction. No time-of-day feature, which would just memorise the morning.
+- *Split:* train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55, 60 s embargo at each boundary, never shuffled. Settings for the gradient-boosted trees (scikit-learn `HistGradientBoostingClassifier`) are picked on the tuning hour, then the model is refit on train + tune and scored on test once.
+- *Intervals:* block bootstrap over 1-minute blocks. Consecutive samples share a label, so a row-level bootstrap would be far too narrow.
+- *Leakage tests* (`test_ml.py`): features at time *t* are identical whether the events after *t* are kept, dropped or replaced.
+
+**Test-period AUC** (13:30–15:55, includes the 2 pm Fed announcement)
+
+| Label | Imbalance (baseline) | Logistic, all features | Gradient boosting | Gain over baseline, 95% CI |
+|---|---|---|---|---|
+| Next mid move (528,778 samples) | 0.603 | 0.609 | **0.652** | +0.048 (+0.041 to +0.054) |
+| Up/down in 100 ms | 0.638 | 0.642 | **0.683** | +0.045 (+0.034 to +0.052) |
+| Up/down in 1 s | 0.582 | 0.592 | **0.605** | +0.023 (+0.009 to +0.035) |
+
+The model beats the baseline in every half hour of the test period (0.630–0.680 vs 0.590–0.629), and it is calibrated: the top decile predicts 72% up and 73% were. The logistic regression barely beats imbalance, so the gain comes from interactions the trees find, not from just adding features. The most important features are signed trade flow over the last second, the size at the best ask and bid, time since the last move and 100 ms order-flow imbalance.
+
+![ROC and feature importance](results/ml/roc_importance.png)
+
+**Does it make money?** The model becomes a quote filter: pull the ask while P(up) > 0.5 + *t*, and the bid while P(up) < 0.5 − *t*. Pulling quotes always means trading less, which earlier looked like an improvement and wasn't. So each signal's thresholds are set so it pulls a quote the same share of the time (10–60%) on the tuning hour, and the comparison is **loss per share** at equal pull rates. Join best + inventory skew, test period only:
+
+| Latency | No filter | Imbalance, pull 50% | Model, pull 50% |
+|---|---|---|---|
+| 0 | −$1,147 · −$0.31/100 sh · 1 s markout −0.28¢ | −$841 · −$0.54/100 sh · −0.28¢ | **+$160 · +$0.10/100 sh · −0.14¢** |
+| 100 µs | −$2,086 · −$0.51 · −0.42¢ | −$871 · −$0.48 · −0.39¢ | **−$145 · −$0.08 · −0.33¢** |
+| 1 ms | −$2,792 · −$0.56 · −0.56¢ | −$1,578 · −$0.53 · −0.49¢ | **−$1,154 · −$0.36 · −0.48¢** |
+| 10 ms | −$3,325 · −$0.68 · −0.68¢ | −$2,266 · −$0.71 · −0.65¢ | **−$1,689 · −$0.50 · −0.64¢** |
+
+- The model filter loses less per share than imbalance at **all 24** matched settings (6 pull rates × 4 latencies). At 0 latency it turns the afternoon positive at 50–60% pull, and halves the 1 s adverse selection.
+- Imbalance at the same pull rates barely changes loss per share (and sometimes makes it worse). It mostly just trades less, which matches the finding above.
+- **The edge decays with latency:** +$0.43 per 100 shares over imbalance at 0, +$0.28 at 100 µs, +$0.16 at 1 ms, +$0.14 at 10 ms. The prediction is about the next few milliseconds, so it's only worth what you can act on in time.
+- Quoting 1¢ behind trades only 2k–100k shares in the test period, too few for the differences to mean much. The playground shows those runs, but the conclusions above use the join-best runs.
+
+![Loss per share at matched pull rates](results/ml/filters.png)
+
+**Limitations, on top of the backtest's:** one stock, one test afternoon. The intervals cover noise within that afternoon, not other days, so the next check is a second day held out entirely. The filter's thresholds come from the tuning hour, but the choice of a 50% pull rate for the table is made looking at test results; the playground shows every pull rate so nothing is hidden.
 
 ## The market (`sim.py`)
 - A hidden **fundamental** price follows a random walk with occasional **news jumps**.
