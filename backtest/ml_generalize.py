@@ -6,6 +6,9 @@
     # a second day the models never saw (any part of): AAPL on 2019-12-30
     python backtest/ml_generalize.py day2 ~/itch/d2/AAPL_events.csv
 
+    # every other sample day Nasdaq publishes (see cpp/itch/fetch_days.sh), each scored the same way
+    python backtest/ml_generalize.py days ~/itch/days/*/AAPL_events.csv
+
 `stocks` writes results/ml/cross_stock.json. For each stock, on its own 13:30-15:55 test period:
     imbalance       AUC of L1 imbalance (baseline)
     aapl_model      the AAPL model, applied unchanged (does the pattern transfer?)
@@ -77,7 +80,7 @@ def stocks(paths: list[str], n_boot: int) -> dict:
     return out
 
 
-def day2(path: str, n_boot: int, workers: int) -> dict:
+def day2(path: str, n_boot: int, workers: int, name: str = "second_day") -> dict:
     import multiprocessing as mp
 
     import ml_backtest as mb
@@ -96,7 +99,7 @@ def day2(path: str, n_boot: int, workers: int) -> dict:
         scores = {"imbalance": d[BASELINE].to_numpy(float), "model": models[label].predict_proba(Xl)[:, 1]}
         out["auc"][label] = auc_block(d["ts_ns"].to_numpy(), d[label].to_numpy(int), scores, n_boot)
         a = out["auc"][label]["auc"]
-        print(f"day 2 {label:<16} AUC imbalance {a['imbalance']:.4f}  day-1 model {a['model']:.4f}  "
+        print(f"{out['date']} {label:<16} AUC imbalance {a['imbalance']:.4f}  day-1 model {a['model']:.4f}  "
               f"(diff CI {out['auc'][label]['ci95']['model_minus_imbalance'][0]:+.4f}..{out['auc'][label]['ci95']['model_minus_imbalance'][1]:+.4f})",
               flush=True)
 
@@ -118,25 +121,48 @@ def day2(path: str, n_boot: int, workers: int) -> dict:
             sig, tox = mb.signal_names(filt, lat, "test")
             key = {"filter": filt, "pull_rate": rate, "threshold": t, "placement": "join", "action": action, "latency_us": lat}
             jobs.append((key, mb.strategy(filt, t, "join", action, lat), sig, tox, window, False))
-    results = mb.run_jobs(jobs, workers, "day-2")
+    results = mb.run_jobs(jobs, workers, out["date"])
     rows = pd.DataFrame([r for r, _ in results]).drop(columns=["seconds"])
     out["backtest"] = rows.to_dict("records")
-    rows.to_csv(ML / "second_day_backtest.csv", index=False, float_format="%.5g")
+    rows.to_csv(ML / f"{name}_backtest.csv", index=False, float_format="%.5g")
     print(rows[["latency_us", "filter", "action", "pull_rate", "pnl_with_rebate", "shares", "pnl_per_100_shares", "markout_1s"]]
           .round(3).to_string(index=False))
-    (ML / "second_day.json").write_text(json.dumps(clean(out), indent=1, allow_nan=False))
+    (ML / f"{name}.json").write_text(json.dumps(clean(out), indent=1, allow_nan=False))
     return out
+
+
+def days(paths: list[str], n_boot: int, workers: int) -> dict:
+    """Every other day Nasdaq publishes, each scored like `day2`: day-1 models, thresholds and rates frozen.
+
+    Each path is DATE/AAPL_events.csv with DATE in ISO form. Per-day results go to results/ml/days/;
+    the summary (one row per day: AUC and each filter's PnL) to results/ml/days.json."""
+    (ML / "days").mkdir(exist_ok=True)
+    summary = []
+    for path in sorted(paths):
+        date = Path(path).parent.name
+        r = day2(path, n_boot, workers, name=f"days/{date}")
+        nm = r["auc"]["next_move"]
+        row = {"date": date, "events": r["events"], "auc_model": nm["auc"]["model"], "auc_imbalance": nm["auc"]["imbalance"],
+               "auc_gain_ci95": nm["ci95"]["model_minus_imbalance"], "pnl": {}}
+        for b in r["backtest"]:
+            k = f"{b['filter']}|{b['action']}|{b['latency_us']}"
+            row["pnl"][k] = {"pnl_with_rebate": b["pnl_with_rebate"], "shares": b["shares"], "pull_rate": b["pull_rate"]}
+        summary.append(row)
+        (ML / "days.json").write_text(json.dumps(clean({"days": summary}), indent=1, allow_nan=False))
+    return {"days": summary}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["stocks", "day2"])
+    ap.add_argument("mode", choices=["stocks", "day2", "days"])
     ap.add_argument("events", nargs="+")
     ap.add_argument("--boot", type=int, default=200)
     ap.add_argument("--workers", type=int, default=2)
     a = ap.parse_args()
     if a.mode == "stocks":
         stocks(a.events, a.boot)
+    elif a.mode == "days":
+        days(a.events, a.boot, a.workers)
     else:
         day2(a.events[0], a.boot, a.workers)
 
