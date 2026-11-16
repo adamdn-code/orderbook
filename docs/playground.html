@@ -3,85 +3,86 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Strategy playground · Order book · Adam Nguyen</title>
-<meta name="description" content="Market-make Apple on real Nasdaq order flow with machine-learning quote filters. Every number is a precomputed backtest.">
-<link rel="preload" href="fonts/ArchivoExtraCondensed-Black.woff2" as="font" type="font/woff2" crossorigin>
+<title>Market making on Apple's order book, with and without an order-flow filter · Adam Nguyen</title>
+<meta name="description" content="A playable working paper: a market maker quotes Apple on real Nasdaq order flow, with machine-learning quote filters chosen on a tuning hour and tested on an untouched afternoon.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <link rel="stylesheet" href="site.css">
 <style>
-/* ---------- the desk: controls | results | scorecard ---------- */
-.desk { display: grid; grid-template-columns: 286px minmax(0, 1fr) 340px; gap: var(--gap); align-items: start; }
-.rail { display: flex; flex-direction: column; gap: 18px; }
+/* ---------- title block ---------- */
+.titleblock { padding: 44px 0 0; }
+.titleblock h1 { font-size: clamp(30px, 3.7vw, 44px); max-width: 24ch; }
+.byline { font: 400 14.5px/1.5 var(--ui); color: var(--ink-2); margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.byline .sep { color: var(--rule-soft); }
+.abstract { margin: 26px 0 0; padding: 18px 0 0; border-top: 1px solid var(--rule-soft); max-width: 78ch; }
+.abstract p { font: 400 17px/1.62 var(--serif); margin: 0; }
+.abstract .h { font-weight: 600; margin-right: 6px; }
+.keyfacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 22px 0 0; border-top: 1.5px solid var(--rule); border-bottom: 1.5px solid var(--rule); max-width: 900px; }
+.keyfacts > div { padding: 10px 14px 11px 0; min-width: 0; }
+.keyfacts .k { display: block; font-size: 12.5px; color: var(--muted); }
+.keyfacts .v { display: block; font: 600 24px/1.15 var(--figures); margin-top: 2px; white-space: nowrap; }
+
+/* ---------- figure 1: settings beside the figure ---------- */
+.desk { display: grid; grid-template-columns: 268px minmax(0, 1fr); gap: 36px; align-items: start; }
+.rail { display: flex; flex-direction: column; gap: 18px; padding-top: 2px; }
+.rail .rhead { font: 600 15px/1.3 var(--serif); margin: 0; }
 .rail .group { display: flex; flex-direction: column; gap: 7px; }
 .rail .glabel { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
-.filters { display: flex; flex-direction: column; gap: 4px; }
+.filters { display: flex; flex-direction: column; gap: 2px; }
 .filter {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 11px; align-items: center; text-align: left;
+  display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 1px 10px; align-items: center; text-align: left;
   border: 1px solid transparent; background: transparent; border-radius: var(--radius); padding: 7px 8px; cursor: pointer;
   transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
 }
-.filter .badge { grid-row: span 2; }
-.filter .fname { font-weight: 600; font-size: 14px; line-height: 1.2; }
+.filter i { grid-row: span 2; width: 22px; border-top: 2px solid var(--c); }
+.filter.dash i { border-top-style: dashed; }
+.filter .fname { font-weight: 600; font-size: 14px; line-height: 1.25; }
 .filter .fdesc { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
-.filter:hover { background: #e2e3dc; }
-.filter[aria-checked="true"] { background: var(--card); border-color: var(--ink); }
+.filter:hover { background: var(--shade); }
+.filter[aria-checked="true"] { border-color: var(--ink); }
 .rate { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
 .rate input { width: 100%; margin: 0; }
-.rate output { font: 600 20px/1 var(--figures); min-width: 3.2ch; text-align: right; }
+.rate output { font: 600 19px/1 var(--figures); min-width: 3.2ch; text-align: right; }
 .ticks { grid-column: 1 / -1; position: relative; height: 18px; font-size: 11.5px; color: var(--muted); }
 .ticks span { position: absolute; transform: translateX(-50%); top: 0; }
-.ticks .pickmark { top: 0; color: var(--ink); font-weight: 700; }
-.ticks .pickmark::before { content: ""; position: absolute; left: 50%; top: -9px; width: 2px; height: 7px; background: var(--ink); transform: translateX(-50%); }
+.ticks .pickmark { color: var(--ink); font-weight: 700; }
+.ticks .pickmark::before { content: ""; position: absolute; left: 50%; top: -8px; width: 1.5px; height: 6px; background: var(--ink); transform: translateX(-50%); }
 .rail .seg { width: 100%; }
 .rail .seg button { flex: 1; padding: 6px 4px; }
 .rail .hint { font-size: 12.5px; color: var(--muted); margin: 0; }
 
-.work { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-.result { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); }
-.result > div { padding: 12px 14px 13px; border-right: 1px solid var(--rule-soft); min-width: 0; }
-.result > div:last-child { border-right: 0; }
-.result .k { font-size: 12.5px; color: var(--muted); display: block; }
-.result .v { font: 600 clamp(22px, 2.3vw, 30px)/1.1 var(--figures); display: block; margin-top: 3px; white-space: nowrap; letter-spacing: -0.01em; }
-.result .d { font-size: 12.5px; display: block; margin-top: 3px; color: var(--muted); white-space: nowrap; }
-.chartbox { padding: 14px 16px 12px; }
-.chartbox .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.chartbox h2 { margin: 0; }
-.chartbox .sub { color: var(--muted); font-size: 13px; }
-#plot-pnl { height: 330px; margin-top: 8px; }
-.score h2 { margin-bottom: 4px; }
-.score .lede { font-size: 13px; color: var(--ink-2); margin: 0 0 10px; }
-.score table { font-size: 13px; }
-.score tbody tr { cursor: pointer; }
-.score tbody tr:hover td { background: #ebece6; }
-.score .rowname { display: flex; align-items: center; }
+.work { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.result { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1.5px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.result > div { padding: 9px 12px 10px 0; min-width: 0; }
+.result .k { font-size: 12px; color: var(--muted); display: block; }
+.result .v { font: 600 clamp(20px, 2vw, 26px)/1.15 var(--figures); display: block; margin-top: 2px; white-space: nowrap; }
+.result .d { font-size: 12px; display: block; margin-top: 2px; color: var(--muted); white-space: nowrap; }
+#plot-pnl { height: 340px; }
 
-/* ---------- evidence ---------- */
-.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
-.cols2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--gap); }
-#plot-front { height: 300px; margin-top: 8px; }
-#plot-roc { height: 250px; }
-#plot-imp { height: 250px; }
-.panel h3:first-child { margin-top: 0; }
-.prose { font-size: 14.5px; }
-.prose p, .prose ul { max-width: 72ch; }
-.prose p { margin: 0 0 10px; }
-.prose ul { margin: 0; padding-left: 18px; }
-.prose li { margin-bottom: 6px; }
-#err { display: none; margin: 20px 0; padding: 14px 16px; border: 1px solid var(--worse); border-radius: var(--radius); background: var(--card); }
+.cols2 { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px; align-items: start; }
+#plot-front { height: 320px; }
+#plot-roc { height: 280px; }
+#plot-imp { height: 280px; }
+#t-score tbody tr { cursor: pointer; }
+#t-score tbody tr:hover td { background: var(--shade); }
+.stack > * + * { margin-top: 28px; }
+#err { display: none; margin: 20px 0; padding: 12px 0 12px 16px; border-left: 1px solid var(--pencil); color: var(--pencil); }
 
-@media (max-width: 1240px) {
-  .desk { grid-template-columns: 270px minmax(0, 1fr); }
-  .score { grid-column: 1 / -1; }
+@media (max-width: 1040px) {
+  .cols3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
-  .desk { grid-template-columns: minmax(0, 1fr); }
+  .desk { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .work { order: -1; }
-  .rail { position: static; }
   .filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .filter .fdesc { display: none; }
   .result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .result > div { border-bottom: 1px solid var(--rule-soft); }
-  .result > div:nth-child(2n) { border-right: 0; }
-  .result > div:last-child { grid-column: 1 / -1; border-bottom: 0; }
+  .result > div:last-child { grid-column: 1 / -1; }
+  .keyfacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .byline { flex-direction: column; }
+  .byline .sep { display: none; }
   #plot-pnl { height: 260px; }
   .cols3, .cols2 { grid-template-columns: minmax(0, 1fr); }
 }
@@ -99,118 +100,142 @@
 </header>
 
 <main class="page">
-  <section class="intro">
-    <div>
-      <h1>Strategy playground</h1>
-      <p>A market maker quoting Apple on real Nasdaq order flow. Pick a filter and its settings to see how the afternoon goes. Every number is a backtest, run ahead of time for every combination.</p>
+  <section class="titleblock" aria-labelledby="title">
+    <h1 id="title">Market making on Apple's order book, with and without an order-flow filter</h1>
+    <p class="byline"><span>Adam Nguyen</span><span class="sep" aria-hidden="true">|</span><span>University of Washington, Mathematics and Informatics</span><span class="sep" aria-hidden="true">|</span><span>A playable working paper</span></p>
+    <div class="abstract">
+      <p><span class="h">Abstract.</span>A market maker quotes Apple on a day of real Nasdaq order flow, rebuilt message by message from TotalView-ITCH with queue position tracked exactly. A gradient-boosted model of the next mid-price move reaches a test AUC of <b>0.652</b>, against 0.603 for the standard book-imbalance signal, and is used to pull quotes it expects to be run over. With every threshold and activity rate chosen on a tuning hour before the test afternoon is run, the filter cuts the afternoon's loss from <b>−$1,147 to −$470</b> at zero latency, and it loses less per share than imbalance at matched activity. With latency added, the best ML filter still cuts the loss by more than half at every setting up to 10 ms, and on a second, untouched day the fill-toxicity model holds up best. Every run below is real and precomputed; change the settings in Figure 1 to load any of them.</p>
     </div>
-    <p class="meta" id="meta"><b>AAPL</b> · 2019-01-30 · 13:30–15:55 ET</p>
+    <div class="keyfacts" aria-label="Headline numbers">
+      <div><span class="k">Next-move AUC, test</span><span class="v">0.652</span></div>
+      <div><span class="k">Book-imbalance AUC</span><span class="v">0.603</span></div>
+      <div><span class="k">Afternoon PnL, no filter</span><span class="v">−$1,147</span></div>
+      <div><span class="k">With the filter</span><span class="v">−$470</span></div>
+    </div>
   </section>
 
   <div id="err" role="alert"></div>
 
-  <section class="desk" aria-label="Strategy settings and results">
-    <aside class="rail" aria-label="Settings">
-      <div class="group">
-        <span class="glabel" id="filter-label">Quote filter</span>
-        <div class="filters" id="filters" role="radiogroup" aria-labelledby="filter-label"></div>
-      </div>
-      <div class="group" id="rate-group">
-        <label class="glabel" for="rate">Active this share of the time</label>
-        <div class="rate">
-          <input type="range" id="rate" min="0" max="5" step="1" value="2" aria-describedby="rate-hint">
-          <output id="rate-out" for="rate"></output>
-          <div class="ticks" id="ticks" aria-hidden="true"></div>
+  <section class="section" id="playground" aria-labelledby="s1">
+    <h2 id="s1"><span class="n">1</span>The afternoon, under any setting</h2>
+    <p class="lede">The test afternoon of <span id="meta-date">30 January 2019</span>, 1:30 to 3:55 pm ET, which no model or setting was fit on. Pick a filter and its settings; the figure, its caption and Table 1 follow.</p>
+    <div class="desk">
+      <aside class="rail" aria-label="Settings for Figure 1">
+        <p class="rhead">Settings</p>
+        <div class="group">
+          <span class="glabel" id="filter-label">Quote filter</span>
+          <div class="filters" id="filters" role="radiogroup" aria-labelledby="filter-label"></div>
         </div>
-        <p class="hint" id="rate-hint">The marked rate was picked on the 12:30–13:30 tuning hour, before the test afternoon was run.</p>
-        <button class="btn quiet" id="use-pick" type="button">Use the tuning-hour pick</button>
-      </div>
-      <div class="group">
-        <span class="glabel" id="lat-label">Latency</span>
-        <div class="seg" id="latency" role="radiogroup" aria-labelledby="lat-label"></div>
-      </div>
-      <div class="group">
-        <span class="glabel" id="act-label">When the filter fires</span>
-        <div class="seg" id="action" role="radiogroup" aria-labelledby="act-label">
-          <button type="button" role="radio" data-v="pull">Pull the quote</button><button type="button" role="radio" data-v="shift">Step back 1¢</button>
+        <div class="group" id="rate-group">
+          <label class="glabel" for="rate">Active this share of the time</label>
+          <div class="rate">
+            <input type="range" id="rate" min="0" max="5" step="1" value="2" aria-describedby="rate-hint">
+            <output id="rate-out" for="rate"></output>
+            <div class="ticks" id="ticks" aria-hidden="true"></div>
+          </div>
+          <p class="hint" id="rate-hint">The marked rate was picked on the 12:30–1:30 tuning hour, before the test afternoon was run.</p>
+          <button class="btn quiet" id="use-pick" type="button">Use the tuning-hour pick</button>
         </div>
-      </div>
-      <div class="group">
-        <span class="glabel" id="place-label">Quote at</span>
-        <div class="seg" id="placement" role="radiogroup" aria-labelledby="place-label">
-          <button type="button" role="radio" data-v="join">Best price</button><button type="button" role="radio" data-v="behind">1¢ behind</button>
+        <div class="group">
+          <span class="glabel" id="lat-label">Latency</span>
+          <div class="seg" id="latency" role="radiogroup" aria-labelledby="lat-label"></div>
         </div>
-      </div>
-    </aside>
+        <div class="group">
+          <span class="glabel" id="act-label">When the filter fires</span>
+          <div class="seg" id="action" role="radiogroup" aria-labelledby="act-label">
+            <button type="button" role="radio" data-v="pull">Pull the quote</button><button type="button" role="radio" data-v="shift">Step back 1¢</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="glabel" id="place-label">Quote at</span>
+          <div class="seg" id="placement" role="radiogroup" aria-labelledby="place-label">
+            <button type="button" role="radio" data-v="join">Best price</button><button type="button" role="radio" data-v="behind">1¢ behind</button>
+          </div>
+        </div>
+      </aside>
 
-    <div class="work">
-      <div class="result" aria-live="polite" aria-label="Result for the selected settings, test afternoon">
-        <div><span class="k">PnL with rebate</span><span class="v" id="r-pnl">–</span><span class="d" id="d-pnl"></span></div>
-        <div><span class="k">Shares traded</span><span class="v" id="r-shares">–</span><span class="d" id="d-shares"></span></div>
-        <div><span class="k">PnL per 100 shares</span><span class="v" id="r-per">–</span><span class="d" id="d-per"></span></div>
-        <div><span class="k">1 s markout, ¢/share</span><span class="v" id="r-mk">–</span><span class="d" id="d-mk"></span></div>
-        <div><span class="k">Max inventory</span><span class="v" id="r-inv">–</span><span class="d" id="d-inv"></span></div>
-      </div>
-      <div class="panel chartbox">
-        <div class="head"><h2>The afternoon</h2><span class="sub" id="pnl-sub"></span></div>
+      <figure class="work" aria-labelledby="cap-1">
+        <div class="result" aria-live="polite" aria-label="Result for the selected settings, test afternoon">
+          <div><span class="k">PnL with rebate</span><span class="v" id="r-pnl">–</span><span class="d" id="d-pnl"></span></div>
+          <div><span class="k">Shares traded</span><span class="v" id="r-shares">–</span><span class="d" id="d-shares"></span></div>
+          <div><span class="k">PnL per 100 shares</span><span class="v" id="r-per">–</span><span class="d" id="d-per"></span></div>
+          <div><span class="k">1 s markout, ¢/share</span><span class="v" id="r-mk">–</span><span class="d" id="d-mk"></span></div>
+          <div><span class="k">Max inventory</span><span class="v" id="r-inv">–</span><span class="d" id="d-inv"></span></div>
+        </div>
         <div class="plot" id="plot-pnl"><canvas id="c-pnl" role="img" aria-label="Running PnL through the test afternoon for the selected filter and for no filter"></canvas></div>
+        <figcaption id="cap-1"><b>Figure 1.</b> <span id="cap-1-text">Running PnL with rebate through the test afternoon.</span></figcaption>
+      </figure>
+    </div>
+
+    <div class="cols2" style="margin-top:40px">
+      <div>
+        <p class="caption top" id="cap-t1"><b>Table 1.</b> <span id="score-lede">Each filter at the rate picked on the tuning hour. Select a row to load it into Figure 1.</span></p>
+        <div class="tbl"><table id="t-score" aria-labelledby="cap-t1"></table></div>
       </div>
-      <div class="panel chartbox" id="edge">
-        <div class="head"><h2>Edge, or just less trading?</h2></div>
-        <p class="note" style="margin:6px 0 0">Every filter trades less the more often it fires, and trading less alone cuts the loss. A filter adds edge only if its line sits above the others at the same volume.</p>
+      <figure aria-labelledby="cap-2">
         <div class="plot" id="plot-front"><canvas id="c-front" role="img" aria-label="PnL per 100 shares against shares traded, one line per filter across activity rates"></canvas></div>
-        <p class="note" id="front-note"></p>
+        <figcaption id="cap-2"><b>Figure 2.</b> Edge, or just less trading? Loss per 100 shares against shares traded, one line per filter as its activity rate runs from 10% to 60%. Any filter that fires more trades less, and trading less alone cuts the loss, so a filter adds edge only if its line sits above the others at the same volume. <span id="front-note"></span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="model" aria-labelledby="s2">
+    <h2 id="s2"><span class="n">2</span>How well the model predicts</h2>
+    <p class="lede">Gradient-boosted trees on 19 causal order-flow features, scored on the held-out afternoon. An AUC of 0.5 is a coin flip.</p>
+    <div style="max-width:900px">
+      <p class="caption top" id="cap-t2"><b>Table 2.</b> Test AUC by label. Gain is trees minus imbalance.</p>
+      <div class="tbl"><table id="t-auc" aria-labelledby="cap-t2"></table></div>
+      <p class="note" id="auc-note"></p>
+    </div>
+    <div class="cols2" style="margin-top:32px">
+      <figure aria-labelledby="cap-3">
+        <div class="plot" id="plot-roc"><canvas id="c-roc" role="img" aria-label="ROC curves for the next-move model and order-book imbalance"></canvas></div>
+        <div class="keyline" id="k-roc"></div>
+        <figcaption id="cap-3"><b>Figure 3.</b> ROC for the direction of the next mid move: the model's curve lies above imbalance's everywhere.</figcaption>
+      </figure>
+      <figure aria-labelledby="cap-4">
+        <div class="plot" id="plot-imp"><canvas id="c-imp" role="img" aria-label="Permutation importance of the top eight features"></canvas></div>
+        <figcaption id="cap-4"><b>Figure 4.</b> What it looks at: AUC lost on the test afternoon when each feature is shuffled.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" id="elsewhere" aria-labelledby="s3">
+    <h2 id="s3"><span class="n">3</span>Away from this afternoon</h2>
+    <p class="lede">The same models on a second day nobody tuned on, on other stocks, and with SPY added as a candidate leading signal.</p>
+    <div class="cols2">
+      <div>
+        <p class="caption top" id="d2-title"><b>Table 3.</b> A second day with everything frozen from day 1.</p>
+        <div class="tbl" id="x-day2"></div>
+      </div>
+      <div class="stack">
+        <div><p class="caption top"><b>Table 4.</b> Other stocks, same day.</p><div class="tbl" id="x-stocks"></div></div>
+        <div><p class="caption top"><b>Table 5.</b> Does SPY lead Apple?</p><div class="tbl" id="x-spy"></div></div>
       </div>
     </div>
-
-    <aside class="score panel" aria-labelledby="score-h">
-      <h2 id="score-h">Scorecard</h2>
-      <p class="lede" id="score-lede">Each filter at the rate picked on the tuning hour. Click a row to load it.</p>
-      <div class="tbl"><table id="t-score"></table></div>
-    </aside>
   </section>
 
-  <section class="section" id="model">
-    <h2>How well the model predicts</h2>
-    <p class="lede">Gradient-boosted trees on 19 order-flow features, scored on the held-out afternoon. 0.5 is a coin flip.</p>
-    <div class="cols3">
-      <div class="panel"><h3>ROC, next mid move</h3><div class="plot" id="plot-roc"><canvas id="c-roc" role="img" aria-label="ROC curves for the next-move model and order-book imbalance"></canvas></div><div class="keyline" id="k-roc"></div></div>
-      <div class="panel"><h3>Test AUC by label</h3><div class="tbl"><table id="t-auc"></table></div><p class="note" id="auc-note"></p></div>
-      <div class="panel"><h3>What it looks at</h3><div class="plot" id="plot-imp"><canvas id="c-imp" role="img" aria-label="Permutation importance of the top eight features"></canvas></div><p class="note">AUC lost on the test afternoon when each feature is shuffled.</p></div>
-    </div>
-  </section>
-
-  <section class="section" id="elsewhere">
-    <h2>Away from this afternoon</h2>
-    <p class="lede">The same models on other stocks, on a second day nobody tuned on, and with SPY added as a leading signal.</p>
+  <section class="section" id="training" aria-labelledby="s4">
+    <h2 id="s4"><span class="n">4</span>Training for latency, fills and speed</h2>
     <div class="cols2">
-      <div class="panel"><h3 id="d2-title">A second day, everything frozen</h3><div class="tbl" id="x-day2"></div></div>
-      <div class="panel">
-        <h3>Other stocks, same day</h3><div class="tbl" id="x-stocks"></div>
-        <h3>Does SPY lead Apple?</h3><div id="x-spy"></div>
+      <div class="stack">
+        <div><p class="caption top"><b>Table 6.</b> Latency-aware labels: test AUC for the first move after a cancel could land.</p><div class="tbl" id="x-lat"></div></div>
+        <div><p class="caption top"><b>Table 7.</b> Fill toxicity: AUC for spotting fills that lose money over the next second.</p><div class="tbl" id="x-tox"></div></div>
       </div>
+      <div><p class="caption top"><b>Table 8.</b> In C++, next to the engine.</p><div id="x-cpp"></div></div>
     </div>
   </section>
 
-  <section class="section" id="training">
-    <h2>Training for latency, fills and speed</h2>
-    <div class="cols3">
-      <div class="panel"><h3>Latency-aware labels</h3><div class="tbl" id="x-lat"></div></div>
-      <div class="panel"><h3>Fill toxicity</h3><div class="tbl" id="x-tox"></div></div>
-      <div class="panel"><h3>In C++, next to the engine</h3><div id="x-cpp"></div></div>
-    </div>
-  </section>
-
-  <section class="section" id="method">
-    <h2>Method</h2>
+  <section class="section" id="method" aria-labelledby="s5">
+    <h2 id="s5"><span class="n">5</span>Method and limits</h2>
     <div class="cols2">
-      <div class="panel prose">
-        <p><b>Models.</b> <span class="badge sm nxt">NXT</span> predicts the direction of the next mid-price change. <span class="badge sm lat">LAT</span> predicts the first change after a cancel could land, since nothing can dodge a move inside that gap. <span class="badge sm tox">TOX</span> predicts the 1-second markout of a fill on each side, trained on the fills the plain market maker got in the morning. <span class="badge sm imb">IMB</span> is the old signal: how hard the best bid and ask lean one way.</p>
-        <p><b>Split.</b> Train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55, with a 60-second gap at each boundary and no shuffling. Thresholds, activity rates and model settings all come from the tuning hour; the test afternoon is run once.</p>
+      <div class="prose">
+        <p><b>Filters.</b> <i>Next move</i> predicts the direction of the next mid-price change. <i>Latency-trained</i> predicts the first change after a cancel could land, since nothing can dodge a move inside that gap. <i>Toxicity</i> predicts the 1-second markout of a fill on each side, trained on the fills the plain market maker got in the morning. <i>Imbalance</i> is the baseline: how hard the best bid and ask lean one way.</p>
+        <p><b>Split.</b> Train 9:35–12:30, tune 12:30–1:30, test 1:30–3:55, with a 60-second gap at each boundary and no shuffling. Thresholds, activity rates and model settings all come from the tuning hour; the test afternoon is run once.</p>
         <p><b>Backtest.</b> Quotes are shadow orders whose queue position is tracked exactly from Nasdaq's order-level feed, with place and cancel latency and a $0.0020 per share rebate.</p>
         <p><b>Fair comparison.</b> Each filter's thresholds are set so it fires the same share of the time on the tuning hour, so loss per share is compared at equal activity.</p>
       </div>
-      <div class="panel prose">
+      <div class="prose">
         <p><b>Limits.</b></p>
         <ul>
           <li>Two days of one stock for the backtests, the second held out entirely. Better than one, not a track record.</li>
@@ -218,6 +243,7 @@
           <li>The rebate is assumed; auction and hidden-order fills are not modelled.</li>
           <li>The tuning hour is short, so the rate it picks is a noisy choice. That is the cost of not peeking.</li>
         </ul>
+        <p class="margin-note"><b>A note on an earlier result.</b> An earlier version of this page reported a profit of +$160 at zero latency. That activity rate had been chosen by looking at the test afternoon. Chosen on the tuning hour instead, as everything here now is, the result is the −$470 above.</p>
         <p class="note">Code, data pipeline and full write-up: <a href="https://github.com/adamdn-code/orderbook/tree/main/backtest">backtest/ on GitHub</a>.</p>
       </div>
     </div>
@@ -238,14 +264,14 @@ const OWNER = { github: "https://github.com/adamdn-code", linkedin: "https://lin
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const FILTERS = [
-  { id: "none", code: "OFF", cls: "off", name: "No filter", desc: "Quote all the time" },
-  { id: "imbalance", code: "IMB", cls: "imb", name: "Imbalance", desc: "Pull when the best bid and ask lean hard one way" },
-  { id: "model", code: "NXT", cls: "nxt", name: "ML: next move", desc: "Pull when the model expects the price to run through the quote" },
-  { id: "model_lat", code: "LAT", cls: "lat", name: "ML: latency-trained", desc: "Same, trained on the first move after a cancel can land" },
-  { id: "toxicity", code: "TOX", cls: "tox", name: "ML: fill toxicity", desc: "Pull a side when a fill there is predicted to lose money" },
+  { id: "none", short: "No filter", name: "No filter", desc: "Quote all the time", v: "--s-none", dash: true },
+  { id: "imbalance", short: "Imbalance", name: "Book imbalance", desc: "Pull when the best bid and ask lean hard one way", v: "--s-imb" },
+  { id: "model", short: "Next move", name: "ML: next move", desc: "Pull when the model expects the price to run through the quote", v: "--s-nxt" },
+  { id: "model_lat", short: "Latency-trained", name: "ML: latency-trained", desc: "Same, trained on the first move after a cancel can land", v: "--s-lat" },
+  { id: "toxicity", short: "Toxicity", name: "ML: fill toxicity", desc: "Pull a side when a fill there is predicted to lose money", v: "--s-tox" },
 ];
 const F = Object.fromEntries(FILTERS.map((f) => [f.id, f]));
-const COLOR = () => ({ none: css("--graph"), imbalance: css("--gold"), model: css("--kelly"), model_lat: css("--royal"), toxicity: css("--verm") });
+const COLOR = () => Object.fromEntries(FILTERS.map((f) => [f.id, css(f.v)]));
 const state = { filter: "model", pull: 2, latency: 0, placement: "join", action: "pull" };
 let D, index, picked;
 
@@ -256,8 +282,10 @@ const latName = (us) => us === 0 ? "0" : us >= 1000 ? `${us / 1000} ms` : `${us}
 const hhmm = (s) => `${Math.floor(s / 3600) > 12 ? Math.floor(s / 3600) - 12 : Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}`;
 const f3 = (v) => v == null ? "–" : v.toFixed(3);
 const pct = (r) => `${Math.round(r * 100)}%`;
-const badge = (id, size = "") => `<span class="badge ${size} ${F[id].cls}">${F[id].code}</span>`;
+// a series key: a line sample in the series' colour and dash, then its short name
+const badge = (id) => `<span class="key${F[id].dash ? " dash" : ""}" style="--c:var(${F[id].v})"><i></i>${F[id].short}</span>`;
 const gainCi = (g, c) => `<span class="num-strong">${signed(g, 3)}</span><small>${c ? `${signed(c[0], 3)} to ${signed(c[1], 3)}` : ""}</small>`;
+const longDate = (iso) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 // model_lat at zero latency is the same model as `model`
 const eff = (f, lat) => (f === "model_lat" && lat === 0 ? "model" : f);
@@ -298,9 +326,9 @@ function check(container, value) {
 function setup() {
   index = new Map(D.runs.map((r) => [key(r.filter, r.pull_rate, r.latency_us, r.placement, r.action), r]));
   picked = new Map((D.meta.selected || []).map((s) => [`${s.filter}|${s.latency_us}|${s.action}`, s.pull_rate]));
-  $("meta").innerHTML = `<b>${D.meta.symbol}</b> · ${D.meta.date} · test afternoon, 1:30–3:55 pm ET`;
+  $("meta-date").textContent = longDate(D.meta.date);
   $("filters").innerHTML = FILTERS.map((f) =>
-    `<button type="button" role="radio" class="filter" data-v="${f.id}">${badge(f.id, "lg")}<span class="fname">${f.name}</span><span class="fdesc">${f.desc}</span></button>`).join("");
+    `<button type="button" role="radio" class="filter${f.dash ? " dash" : ""}" style="--c:var(${f.v})" data-v="${f.id}"><i aria-hidden="true"></i><span class="fname">${f.name}</span><span class="fdesc">${f.desc}</span></button>`).join("");
   $("latency").innerHTML = D.meta.latencies_us.map((l) => `<button type="button" role="radio" data-v="${l}">${latName(l)}</button>`).join("");
   $("rate").max = D.meta.pull_rates.length - 1;
   radios($("filters"), (v) => { state.filter = v; const i = pickIdx(v); if (i >= 0) state.pull = i; });
@@ -354,23 +382,39 @@ function render() {
   const dmk = r.markout_1s - base.markout_1s;
   setResult("mk", signed(r.markout_1s), vs && `${signed(dmk)} ${vs}`, vs && dmk >= 0);
   setResult("inv", r.max_abs_inventory.toLocaleString("en-US"), vs && `${base.max_abs_inventory.toLocaleString("en-US")} with no filter`, null);
-  $("pnl-sub").textContent = `Latency ${latName(state.latency)} · quoting at ${behind ? "1¢ behind" : "the best price"}${off ? "" : ` · ${act(state) === "pull" ? "pulling" : "stepping back"} when it fires`}`;
+  caption(r, base, pi);
   scorecard();
   drawCharts();
 }
 
+// Figure 1's caption states what is drawn and what it shows, for the current settings.
+function caption(r, base, pi) {
+  const off = state.filter === "none", f = F[eff(state.filter, state.latency)];
+  const setting = `latency ${latName(state.latency)}, quoting at ${state.placement === "behind" ? "1¢ behind" : "the best price"}`;
+  let text = `Running PnL with rebate through the test afternoon, ${setting}. `;
+  if (off) text += `Dashed: quoting all the time, ending at ${money(base.pnl_with_rebate)}.`;
+  else {
+    const rate = pct(D.meta.pull_rates[state.pull]);
+    const which = state.pull === pi ? `${rate}, the rate picked on the tuning hour` : `${rate}; the tuning hour picked ${pi >= 0 ? pct(D.meta.pull_rates[pi]) : "none"}`;
+    const gap = r.pnl_with_rebate - base.pnl_with_rebate;
+    text += `Solid: the ${f.short.toLowerCase()} filter, ${act(state) === "pull" ? "pulling" : "stepping back"} ${which}, ending at ${money(r.pnl_with_rebate)}. Dashed: no filter, ending at ${money(base.pnl_with_rebate)}. `;
+    text += gap >= 0 ? `The filter finishes ${money(gap)} ahead.` : `Here the filter finishes ${money(-gap)} behind.`;
+  }
+  $("cap-1-text").textContent = text;
+}
+
 function scorecard() {
   const base = get("none", 0);
-  let rows = `<thead><tr><th>Filter</th><th>Rate</th><th>PnL</th><th>Per 100 sh</th></tr></thead><tbody>`;
+  let rows = `<thead><tr><th>Filter</th><th>Rate</th><th>PnL</th><th>Shares</th><th>Per 100 sh</th><th>1 s markout</th></tr></thead><tbody>`;
   for (const f of FILTERS) {
     if (f.id === "model_lat" && state.latency === 0) continue;
     const i = f.id === "none" ? 0 : pickIdx(f.id); if (i < 0) continue;
     const r = f.id === "none" ? base : get(f.id, i); if (!r) continue;
     const cur = eff(state.filter, state.latency) === f.id && (f.id === "none" || i === state.pull) ? "cur" : "";
-    rows += `<tr class="${cur}" data-f="${f.id}" data-i="${i}" tabindex="0"><td><span class="rowname">${badge(f.id)}</span></td><td>${f.id === "none" ? "–" : pct(D.meta.pull_rates[i])}</td><td class="num-strong">${money(r.pnl_with_rebate)}</td><td>${per(r.pnl_per_100_shares)}</td></tr>`;
+    rows += `<tr class="${cur}" data-f="${f.id}" data-i="${i}" tabindex="0"><td>${badge(f.id)}</td><td>${f.id === "none" ? "–" : pct(D.meta.pull_rates[i])}</td><td class="num-strong">${money(r.pnl_with_rebate)}</td><td>${r.shares.toLocaleString("en-US")}</td><td>${per(r.pnl_per_100_shares)}</td><td>${signed(r.markout_1s)}¢</td></tr>`;
   }
   $("t-score").innerHTML = rows + "</tbody>";
-  $("score-lede").textContent = `Each filter at the rate picked on the tuning hour, latency ${latName(state.latency)}, ${act(state) === "pull" ? "pulling" : "stepping back"}. Click a row to load it.`;
+  $("score-lede").textContent = `Each filter at the rate picked on the tuning hour; test afternoon, latency ${latName(state.latency)}, ${act(state) === "pull" ? "pulling" : "stepping back"}, quoting at ${state.placement === "behind" ? "1¢ behind" : "the best price"}. Select a row to load it into Figure 1.`;
   for (const tr of $("t-score").querySelectorAll("tbody tr")) {
     const go = () => { state.filter = tr.dataset.f; state.pull = +tr.dataset.i || state.pull; render(); };
     tr.addEventListener("click", go);
@@ -412,20 +456,12 @@ function line(g, xs, ys, X, Y, color, width = 2, dash = []) {
   g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash); g.lineJoin = "round"; g.beginPath();
   xs.forEach((x, i) => (i ? g.lineTo(X(x), Y(ys[i])) : g.moveTo(X(x), Y(ys[i])))); g.stroke(); g.setLineDash([]);
 }
-// a pit badge drawn on canvas, centred-left at (x, y)
-function drawBadge(g, x, y, f, size = 12) {
-  const color = COLOR()[f];
-  g.font = `900 ${size}px ${css("--badge")}`;
-  const text = F[f].code, tw = g.measureText(text).width + size * 0.12 * text.length;
-  const w = Math.max(tw + size * 0.9, size * 2.8), h = size * 1.55;
-  g.fillStyle = color; g.beginPath(); g.roundRect(x, y - h / 2, w, h, 3); g.fill();
-  g.fillStyle = f === "imbalance" ? css("--ink") : "#fff";
-  g.textAlign = "center"; g.textBaseline = "middle";
-  if ("letterSpacing" in g) g.letterSpacing = `${size * 0.06}px`;
-  g.fillText(text, x + w / 2, y + 0.5);
-  if ("letterSpacing" in g) g.letterSpacing = "0px";
-  return w;
+// a direct label at a line's end, in the series' colour
+function drawLabel(g, x, y, f, text) {
+  g.font = `600 12px ${css("--ui")}`; g.fillStyle = COLOR()[f]; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillText(text ?? F[f].short, x, y);
 }
+const dashOf = (f) => (F[f].dash ? [5, 4] : []);
 
 // The one authored motion: when a setting changes, the selected strategy's afternoon draws in from 1:30.
 const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -451,24 +487,24 @@ function pnlChart() {
   if (state.filter !== "none") series.push([r, eff(state.filter, state.latency)]);
   const n = Math.min(t.length, ...series.map((s) => s[0].series.pnl.length));
   const yr = range(series.flatMap((s) => s[0].series.pnl.slice(0, n)).concat([0]), 0.1), xr = [t[0], t[n - 1]];
-  const pad = { l: 62, r: 64, t: 14, b: 26 };
+  const pad = { l: 62, r: 132, t: 18, b: 26 };
   const xt = []; for (let s = Math.ceil(xr[0] / 1800) * 1800; s <= xr[1]; s += 1800) xt.push(s);
   const { X, Y } = axes(g, w, h, pad, xr, yr, xt, ticks(yr[0], yr[1]), hhmm, money);
   g.strokeStyle = css("--ink"); g.lineWidth = 1; g.beginPath(); g.moveTo(pad.l, Math.round(Y(0)) + 0.5); g.lineTo(w - pad.r, Math.round(Y(0)) + 0.5); g.stroke();
   const fed = 14 * 3600;
   if (fed > xr[0] && fed < xr[1]) {
-    g.strokeStyle = css("--ink-2"); g.setLineDash([2, 3]); g.beginPath(); g.moveTo(Math.round(X(fed)) + 0.5, pad.t); g.lineTo(Math.round(X(fed)) + 0.5, h - pad.b); g.stroke(); g.setLineDash([]);
-    g.fillStyle = css("--ink-2"); g.textAlign = "left"; g.textBaseline = "top"; g.font = `500 12px ${css("--ui")}`;
-    g.fillText("Fed statement, 2:00 pm", X(fed) + 6, pad.t);
+    g.strokeStyle = css("--pencil"); g.setLineDash([2, 3]); g.beginPath(); g.moveTo(Math.round(X(fed)) + 0.5, pad.t); g.lineTo(Math.round(X(fed)) + 0.5, h - pad.b); g.stroke(); g.setLineDash([]);
+    g.fillStyle = css("--pencil"); g.textAlign = "left"; g.textBaseline = "top"; g.font = `italic 13px ${css("--serif")}`;
+    g.fillText("Fed statement, 2:00 pm", X(fed) + 6, pad.t - 2);
   }
   for (const [run, f] of series) {
     const m = f === "none" ? n : Math.max(2, Math.round(n * reveal));
-    line(g, t.slice(0, m), run.series.pnl.slice(0, m), X, Y, COLOR()[f], f === "none" ? 1.6 : 2.6, f === "none" ? [5, 4] : []);
+    line(g, t.slice(0, m), run.series.pnl.slice(0, m), X, Y, COLOR()[f], f === "none" ? 1.5 : 2.4, dashOf(f));
   }
-  // badges at the line ends, nudged apart when they collide
-  const ends = series.map(([run, f]) => ({ f, y: Y(run.series.pnl[n - 1]) })).sort((a, b) => a.y - b.y);
-  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 22) ends[i].y = ends[i - 1].y + 22;
-  for (const e of ends) drawBadge(g, w - pad.r + 8, e.y, e.f, 12);
+  // direct labels at the line ends, nudged apart when they collide
+  const ends = series.map(([run, f]) => ({ f, y: Y(run.series.pnl[n - 1]), v: run.pnl_with_rebate })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 18) ends[i].y = ends[i - 1].y + 18;
+  for (const e of ends) drawLabel(g, w - pad.r + 8, e.y, e.f, `${F[e.f].short}, ${money(e.v)}`);
 }
 
 function frontier() {
@@ -479,7 +515,7 @@ function frontier() {
   const base = get("none", 0);
   const all = [...shown.flatMap((f) => pts[f].map((p) => p[1])), base];
   const xr = range(all.map((r) => r.shares / 1000), 0.06), yr = range(all.map((r) => r.pnl_per_100_shares).concat([0]), 0.1);
-  const pad = { l: 58, r: 62, t: 14, b: 40 };
+  const pad = { l: 58, r: 96, t: 14, b: 40 };
   const { X, Y } = axes(g, w, h, pad, xr, yr, ticks(xr[0], xr[1], 5), ticks(yr[0], yr[1]), (v) => `${v}k`, (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(2));
   g.fillStyle = css("--muted"); g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = `12px ${css("--ui")}`;
   g.fillText("shares traded on the test afternoon", pad.l + (w - pad.l - pad.r) / 2, h - 4);
@@ -488,28 +524,28 @@ function frontier() {
   const ends = [];
   for (const f of shown) {
     const p = pts[f].map((q) => q[1]); if (!p.length) continue;
-    line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR()[f], f === cur ? 3 : 1.6);
+    line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR()[f], f === cur ? 2.6 : 1.3);
     const pi = pickIdx(f);
     for (const [i, r] of pts[f]) {
       const x = X(r.shares / 1000), y = Y(r.pnl_per_100_shares);
-      g.fillStyle = COLOR()[f]; g.beginPath(); g.arc(x, y, i === pi ? 6 : 3.4, 0, 7); g.fill();
-      if (i === pi) { g.strokeStyle = css("--ink"); g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 8.5, 0, 7); g.stroke(); }
+      g.fillStyle = COLOR()[f]; g.beginPath(); g.arc(x, y, i === pi ? 4.5 : 2.8, 0, 7); g.fill();
+      if (i === pi) { g.strokeStyle = COLOR()[f]; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 7.5, 0, 7); g.stroke(); }
     }
     const last = p.reduce((a, b) => (a.shares > b.shares ? a : b));
     ends.push({ f, y: Y(last.pnl_per_100_shares), x: X(last.shares / 1000) });
   }
-  // label each line just past its last point; nudge apart labels that would overlap
   ends.sort((a, b) => a.y - b.y);
   for (let i = 1; i < ends.length; i++) {
     const prev = ends[i - 1];
-    if (Math.abs(ends[i].x - prev.x) < 46 && ends[i].y - prev.y < 22) ends[i].y = prev.y + 22;
+    if (Math.abs(ends[i].x - prev.x) < 60 && ends[i].y - prev.y < 16) ends[i].y = prev.y + 16;
   }
-  for (const e of ends) drawBadge(g, Math.min(e.x + 10, w - 44), e.y, e.f, 12);
-  g.fillStyle = css("--graph"); g.beginPath(); g.arc(X(base.shares / 1000), Y(base.pnl_per_100_shares), 5, 0, 7); g.fill();
-  drawBadge(g, X(base.shares / 1000) - 44, Y(base.pnl_per_100_shares) - 18, "none", 11);
+  for (const e of ends) drawLabel(g, Math.min(e.x + 10, w - pad.r + 6), e.y, e.f);
+  g.strokeStyle = COLOR().none; g.lineWidth = 1.4; g.beginPath(); g.arc(X(base.shares / 1000), Y(base.pnl_per_100_shares), 4.5, 0, 7); g.stroke();
+  g.font = `600 12px ${css("--ui")}`; g.fillStyle = COLOR().none; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillText("No filter", X(base.shares / 1000) + 9, Y(base.pnl_per_100_shares));
   const sel = get(state.filter, state.pull);
-  if (sel) { g.strokeStyle = css("--ink"); g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 12, 0, 7); g.stroke(); g.setLineDash([]); }
-  $("front-note").textContent = `Latency ${latName(state.latency)}, quoting at ${state.placement === "join" ? "the best price" : "1¢ behind"}, ${act(state) === "pull" ? "pulling" : "stepping back"}. Ringed dots are the tuning-hour picks; the dashed ring is your current setting.`;
+  if (sel) { g.strokeStyle = css("--pencil"); g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 12, 0, 7); g.stroke(); g.setLineDash([]); }
+  $("front-note").textContent = `Drawn for latency ${latName(state.latency)}, quoting at ${state.placement === "join" ? "the best price" : "1¢ behind"}, ${act(state) === "pull" ? "pulling" : "stepping back"}. Ringed points are the tuning-hour picks; the red dashed ring is the setting in Figure 1.`;
 }
 
 function modelPanels() {
@@ -518,15 +554,15 @@ function modelPanels() {
     const { g, w, h } = canvas("c-roc");
     const pad = { l: 34, r: 8, t: 8, b: 36 };
     const { X, Y } = axes(g, w, h, pad, [0, 1], [0, 1], [0, 0.5, 1], [0, 0.5, 1], (v) => v, (v) => v);
-    line(g, [0, 1], [0, 1], X, Y, css("--rule"), 1, [4, 4]);
-    line(g, m.roc.imbalance.fpr, m.roc.imbalance.tpr, X, Y, css("--gold"), 2.2);
-    line(g, m.roc.gbm.fpr, m.roc.gbm.tpr, X, Y, css("--kelly"), 2.6);
+    line(g, [0, 1], [0, 1], X, Y, css("--rule-soft"), 1, [4, 4]);
+    line(g, m.roc.imbalance.fpr, m.roc.imbalance.tpr, X, Y, css("--s-imb"), 1.8);
+    line(g, m.roc.gbm.fpr, m.roc.gbm.tpr, X, Y, css("--s-nxt"), 2.4);
     g.fillStyle = css("--muted"); g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = `12px ${css("--ui")}`;
     g.fillText("false positive rate", pad.l + (w - pad.l - pad.r) / 2, h - 4);
-    $("k-roc").innerHTML = `<span>${badge("model", "sm")} AUC ${nm.auc.gbm.toFixed(3)}</span><span>${badge("imbalance", "sm")} AUC ${nm.auc.imbalance.toFixed(3)}</span>`;
+    $("k-roc").innerHTML = `<span>${badge("model")}<span>AUC ${nm.auc.gbm.toFixed(3)}</span></span><span>${badge("imbalance")}<span>AUC ${nm.auc.imbalance.toFixed(3)}</span></span>`;
   }
   const names = { next_move: "Next move", up_100ms: "Up in 100 ms", up_1s: "Up in 1 s" };
-  let rows = `<thead><tr><th>Label</th><th>${badge("imbalance", "sm")}</th><th>Logistic</th><th>${badge("model", "sm")}</th><th>Gain, 95% CI</th></tr></thead><tbody>`;
+  let rows = `<thead><tr><th>Label</th><th>Imbalance</th><th>Logistic</th><th>Trees</th><th>Gain, 95% CI</th></tr></thead><tbody>`;
   for (const [k, v] of Object.entries(m.labels)) {
     rows += `<tr><td>${names[k] || k}</td><td>${f3(v.auc.imbalance)}</td><td>${f3(v.auc.logistic)}</td><td class="num-strong">${f3(v.auc.gbm)}</td><td>${gainCi(v.auc.gbm - v.auc.imbalance, v.ci95.gbm_minus_imbalance)}</td></tr>`;
   }
@@ -539,8 +575,8 @@ function modelPanels() {
       const y = 2 + i * bh, wbar = Math.max(1, (c.w - left - 50) * Math.max(0, r.auc_drop) / max);
       c.g.font = `12px ${css("--ui")}`; c.g.fillStyle = css("--ink-2"); c.g.textAlign = "right"; c.g.textBaseline = "middle";
       c.g.fillText(r.feature, left - 8, y + bh / 2);
-      c.g.fillStyle = css("--kelly"); c.g.fillRect(left, y + bh * 0.22, wbar, bh * 0.56);
-      c.g.fillStyle = css("--ink"); c.g.textAlign = "left"; c.g.fillText(r.auc_drop.toFixed(4), left + wbar + 6, y + bh / 2);
+      c.g.fillStyle = css("--ink"); c.g.fillRect(left, y + bh * 0.3, wbar, bh * 0.4);
+      c.g.textAlign = "left"; c.g.fillText(r.auc_drop.toFixed(4), left + wbar + 6, y + bh / 2);
     });
   }
 }
@@ -554,24 +590,24 @@ function extraPanels() {
   const x = D.extra || {}, m = D.model;
   const d2 = x.second_day;
   if (d2) {
-    $("d2-title").textContent = "A second day, everything frozen (2019-12-30)";
+    $("d2-title").innerHTML = `<b>Table 3.</b> A second day, ${longDate("2019-12-30")}, with every model, threshold and rate frozen from day 1. Top: AUC. Bottom: PnL for the whole day, each filter at its better action; bold is the least loss at each latency.`;
     const labs = { next_move: "Next move", next_move_100us: "After 100 µs", next_move_1ms: "After 1 ms", next_move_10ms: "After 10 ms" };
-    let html = table(["Label", badge("imbalance", "sm"), "Day-1 model", "Gain, 95% CI"],
+    let html = table(["Label", "Imbalance", "Day-1 model", "Gain, 95% CI"],
       Object.entries(d2.auc).map(([k, v]) => [labs[k] || k, f3(v.auc.imbalance), `<span class="num-strong">${f3(v.auc.model)}</span>`, gainCi(v.auc.model - v.auc.imbalance, v.ci95.model_minus_imbalance)]));
     const lats = [...new Set(d2.backtest.map((r) => r.latency_us))].sort((a, b) => a - b);
     const order = ["none", "imbalance", "model", "model_lat", "toxicity"];
     const best = (l, f) => d2.backtest.filter((r) => r.latency_us === l && r.filter === f).sort((a, b) => b.pnl_with_rebate - a.pnl_with_rebate)[0];
-    const head = ["Latency", ...order.map((f) => badge(f, "sm"))];
+    const head = ["Latency", ...order.map((f) => F[f].short)];
     const rows = lats.map((l) => {
       const vals = order.map((f) => best(l, f));
       const top = Math.max(...vals.filter(Boolean).map((v) => v.pnl_with_rebate));
       return [latName(l), ...vals.map((v) => v ? `<span class="${v.pnl_with_rebate === top ? "num-strong" : ""}">${money(v.pnl_with_rebate)}</span>` : "–")];
     });
-    html += `<p class="note">PnL for the whole day with every setting frozen from day 1, each filter at its better action. Bold is the least loss at that latency.</p>` + table(head, rows);
+    html += `<div style="height:16px"></div>` + table(head, rows);
     $("x-day2").innerHTML = html;
   } else $("x-day2").innerHTML = none("The second-day test");
   const cs = x.cross_stock;
-  $("x-stocks").innerHTML = cs ? table(["Stock", "Spread", badge("imbalance", "sm"), "AAPL model", "Own model", "Own − imb."],
+  $("x-stocks").innerHTML = cs ? table(["Stock", "Spread", "Imbalance", "AAPL model", "Own model", "Own − imb."],
     Object.entries(cs).map(([s, v]) => [s, `${v.mean_spread_cents.toFixed(1)}¢`, f3(v.auc.imbalance), f3(v.auc.aapl_model), `<span class="num-strong">${f3(v.auc.own_model)}</span>`, gainCi(v.auc.own_model - v.auc.imbalance, v.ci95.own_model_minus_imbalance)]))
     + `<p class="note">AUC for the next move. A model trained on each stock beats imbalance on all five; the AAPL model applied unchanged does not carry over to the one-tick stocks.</p>` : none("The other-stocks study");
   const sp = x.spy_features;
@@ -579,16 +615,16 @@ function extraPanels() {
     + `<p class="note">No gain: at these horizons Apple's own book already holds what SPY knows.</p>` : none("The SPY study");
   const ll = m.latency_labels;
   const ln = (k) => ({ next_move_100us: "100 µs", next_move_1ms: "1 ms", next_move_10ms: "10 ms" })[k] || k;
-  $("x-lat").innerHTML = ll ? table(["Latency", badge("imbalance", "sm"), badge("model", "sm"), badge("model_lat", "sm"), "Gain"],
+  $("x-lat").innerHTML = ll ? table(["Latency", "Imbalance", "Next move", "Latency-trained", "Gain"],
     Object.entries(ll).map(([k, v]) => [ln(k), f3(v.auc.imbalance), f3(v.auc.gbm_next_move), `<span class="num-strong">${f3(v.auc.gbm)}</span>`, signed(v.auc.gbm - v.auc.gbm_next_move, 3)]))
-    + `<p class="note">Test AUC for the first move after the cancel lands. The gain at 1 and 10 ms did not hold on the second day.</p>` : none("Latency-aware training");
+    + `<p class="note">The gain at 1 and 10 ms did not hold on the second day.</p>` : none("Latency-aware training");
   const tx = m.toxicity;
-  $("x-tox").innerHTML = tx ? table(["Latency", "Train fills", badge("toxicity", "sm"), badge("imbalance", "sm")],
+  $("x-tox").innerHTML = tx ? table(["Latency", "Train fills", "Toxicity", "Imbalance"],
     Object.entries(tx).map(([l, v]) => [latName(+l), v.train_fills.toLocaleString("en-US"), `<span class="num-strong">${f3(v.test_auc_bad_fill)}</span>`, f3(v.test_auc_bad_fill_imbalance)]))
-    + `<p class="note">AUC for spotting fills that lose money over the next second, on the test afternoon's fills. On the second day this filter lost least at every latency.</p>` : none("The toxicity model");
+    + `<p class="note">Scored on the test afternoon's fills. On the second day this filter lost least at every latency.</p>` : none("The toxicity model");
   const cp = x.cpp_inference, tr = x.cpp_tradeoff;
-  let html = cp ? `<p class="prose" style="font-size:14px;margin:0 0 8px">Features and trees run in C++ on the same book, <b>bit-identical</b> to Python over ${Math.round(cp.decisions).toLocaleString("en-US")} decisions. Features cost ${Math.round(cp.features_ns_per_decision)} ns per decision.</p>` : none("The C++ port");
-  if (tr) html += table(["Model", "AUC", "ns / call"], tr.rows.map((r) => [r.label.replace(", depth", " × depth"), r.label.startsWith("50 ") ? `<span class="num-strong">${f3(r.auc)}</span>` : f3(r.auc), Math.round(r.predict_ns).toLocaleString("en-US")]).concat([[badge("imbalance", "sm"), f3(tr.imbalance_auc), "–"]]));
+  let html = cp ? `<p class="prose" style="font-size:15px;margin:0 0 10px">Features and trees run in C++ on the same book, <b>bit-identical</b> to Python over ${Math.round(cp.decisions).toLocaleString("en-US")} decisions. Features cost ${Math.round(cp.features_ns_per_decision)} ns per decision.</p>` : none("The C++ port");
+  if (tr) html += table(["Model", "AUC", "ns / call"], tr.rows.map((r) => [r.label.replace(", depth", " × depth"), r.label.startsWith("50 ") ? `<span class="num-strong">${f3(r.auc)}</span>` : f3(r.auc), Math.round(r.predict_ns).toLocaleString("en-US")]).concat([["Imbalance", f3(tr.imbalance_auc), "–"]]));
   $("x-cpp").innerHTML = html;
 }
 

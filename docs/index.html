@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AAPL order book replay · Adam Nguyen</title>
 <meta name="description" content="Scrub through Apple's real Nasdaq order book, rebuilt message by message from TotalView-ITCH by a C++ matching engine.">
-<link rel="preload" href="fonts/ArchivoExtraCondensed-Black.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <link rel="stylesheet" href="site.css">
 <style>
 /* ---------- the tape-reader's board ---------- */
-.board { display: grid; grid-template-columns: 1.1fr 1fr 1.5fr 0.8fr 1.3fr; background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); }
+.board { display: grid; grid-template-columns: 1.1fr 1fr 1.5fr 0.8fr 1.3fr; border-top: 1.5px solid var(--rule); border-bottom: 1px solid var(--rule); }
 .board > div { padding: 12px 16px 13px; border-right: 1px solid var(--rule-soft); min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .board > div:last-child { border-right: 0; }
 .board .k { font-size: 12.5px; color: var(--muted); }
@@ -17,7 +19,7 @@
 .board .v .b { color: var(--bid); } .board .v .a { color: var(--ask); }
 .board .v .x { color: var(--muted); font-weight: 400; padding: 0 0.15em; }
 .board .s { font-size: 12.5px; color: var(--ink-2); }
-.event { font-size: 12.5px; color: var(--ink); background: var(--gold); border-radius: 3px; padding: 2px 6px; align-self: flex-start; }
+.event { font: italic 13px/1.3 var(--serif); color: var(--pencil); align-self: flex-start; }
 .event:empty { display: none; }
 
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 14px 0 10px; }
@@ -26,16 +28,16 @@
 .speed { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
 .moments { display: flex; flex-wrap: wrap; gap: 6px; }
 .moment {
-  display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--rule); background: var(--card); border-radius: var(--radius);
+  display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--rule-soft); background: var(--card); border-radius: var(--radius);
   padding: 4px 9px 4px 5px; min-height: 34px; cursor: pointer; font-size: 13.5px; transition: border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
 }
 .moment .mt { color: var(--muted); font-variant-numeric: tabular-nums; }
 .moment:hover { border-color: var(--ink); }
-.moment[aria-pressed="true"] { border-color: var(--ink); background: #e2e3dc; box-shadow: inset 0 0 0 1px var(--ink); }
+.moment[aria-pressed="true"] { border-color: var(--ink); background: var(--shade); box-shadow: inset 0 0 0 1px var(--ink); }
 .keys { margin-left: auto; font-size: 12.5px; color: var(--muted); }
 .keys kbd { font: 600 11.5px/1 var(--ui); border: 1px solid #b3b6ae; border-radius: 3px; padding: 3px 5px; background: var(--card); color: var(--ink-2); }
 
-.chart { position: relative; height: 300px; background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); }
+.chart { position: relative; height: 300px; background: var(--card); border-bottom: 1px solid var(--rule); }
 .chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #cursor { cursor: crosshair; touch-action: none; }
 #tip { position: absolute; display: none; pointer-events: none; background: var(--ink); color: #fff; font-size: 12.5px; padding: 4px 8px; border-radius: 3px; white-space: pre; font-variant-numeric: tabular-nums; }
@@ -64,7 +66,7 @@
 .ladder .spreadrow { height: 26px; }
 .ladder .spreadrow > div:nth-child(2) { justify-content: center; font-size: 12px; color: var(--ink-2); border-top: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); }
 .ladder .changed .qtext { animation: flash 700ms var(--ease-out); }
-@keyframes flash { from { background: var(--gold); } to { background: transparent; } }
+@keyframes flash { from { background: #f1d9d6; } to { background: transparent; } }
 
 /* trade tape */
 #tape { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
