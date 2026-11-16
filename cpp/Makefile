@@ -60,8 +60,18 @@ asan: | build
 	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -Iinclude -Itests -Iitch tests/itch_tests.cpp $(ITCH_SRC) -lz -o build/itch_tests_asan
 	./build/itch_tests_asan
 
+# WebAssembly build of the book for docs/engine.html (needs clang and lld; see wasm/README.md)
+wasm:
+	bash wasm/build.sh
+
+build/native_bench: wasm/native_bench.cpp wasm/ob_wasm.cpp src/orderbook.cpp include/orderbook.hpp | build
+	$(CXX) -std=c++20 -O2 -Iinclude -Iwasm wasm/native_bench.cpp src/orderbook.cpp -o $@
+
+wasm-test: wasm build/native_bench
+	node wasm/test.mjs $$(./build/native_bench)
+
 clean:
 	rm -rf build
 
 PHONY_ML = ml
-.PHONY: all python itch ml test bench tsan asan clean
+.PHONY: all python itch ml test bench tsan asan clean wasm wasm-test

@@ -1,0 +1,12 @@
+#pragma once
+#include <string>
+namespace std {
+class invalid_argument {
+public:
+    invalid_argument(const string& m) : m_(m) {}
+    invalid_argument(const char* m) : m_(m) {}
+    const char* what() const { return m_.c_str(); }
+private:
+    string m_;
+};
+}  // namespace std

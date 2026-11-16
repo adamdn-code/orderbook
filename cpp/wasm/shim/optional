@@ -1,0 +1,21 @@
+#pragma once
+#include <utility>
+namespace std {
+struct nullopt_t { explicit constexpr nullopt_t(int) {} };
+inline constexpr nullopt_t nullopt{0};
+template <class T> class optional {
+public:
+    constexpr optional() = default;
+    constexpr optional(nullopt_t) {}
+    constexpr optional(const T& v) : v_(v), has_(true) {}
+    constexpr bool has_value() const { return has_; }
+    constexpr explicit operator bool() const { return has_; }
+    constexpr const T& operator*() const { return v_; }
+    constexpr T& operator*() { return v_; }
+    constexpr const T& value() const { return v_; }
+    template <class U> constexpr T value_or(U&& d) const { return has_ ? v_ : static_cast<T>(d); }
+private:
+    T v_{};
+    bool has_ = false;
+};
+}  // namespace std

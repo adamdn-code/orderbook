@@ -19,6 +19,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <link rel="stylesheet" href="site.css">
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
 <style>
 /* ---------- title block ---------- */
 .titleblock { padding: 44px 0 0; }
@@ -104,7 +106,7 @@
   <nav aria-label="Site"><ul class="tabs">
     <li><a href="index.html">Replay</a></li>
     <li><a href="playground.html" aria-current="page">Playground</a></li>
-    <li><a href="#engine">Engine</a></li>
+    <li><a href="engine.html">Live engine</a></li>
     <li><a href="#method">Method</a></li>
   </ul></nav>
   <div class="out" id="owner-links"><a href="https://github.com/adamdn-code/orderbook">GitHub</a><a href="https://linkedin.com/in/adam-nguyen-aaba70367">LinkedIn</a><a href="resume.pdf">Resume</a></div>
@@ -279,7 +281,7 @@
             <tr><td>Time for the whole day, one laptop core</td><td>560 s</td></tr>
           </tbody>
         </table></div>
-        <p class="note">Nasdaq did the matching, so its feed is a log of its own book changing: if the rebuilt book is right, every message names an order that is there, and executions hit the front of the queue. Scrub through Apple's rebuilt day on the <a href="index.html">replay</a>; code in <a href="https://github.com/adamdn-code/orderbook/tree/main/cpp">cpp/ on GitHub</a>.</p>
+        <p class="note">Nasdaq did the matching, so its feed is a log of its own book changing: if the rebuilt book is right, every message names an order that is there, and executions hit the front of the queue. Scrub through Apple's rebuilt day on the <a href="index.html">replay</a>, or place orders against this book <a href="engine.html">live in your browser</a>; code in <a href="https://github.com/adamdn-code/orderbook/tree/main/cpp">cpp/ on GitHub</a>.</p>
       </div>
     </div>
   </section>

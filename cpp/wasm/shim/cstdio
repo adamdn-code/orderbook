@@ -1,0 +1,6 @@
+#pragma once
+#include <cstddef>
+namespace std {
+// Handles the formats orderbook.cpp uses: literal text and %[width]lld.
+int snprintf(char* out, size_t cap, const char* fmt, ...);
+}  // namespace std

@@ -1,0 +1,79 @@
+#pragma once
+#include <cstddef>
+#include <new>
+#include <utility>
+namespace std {
+// A growable array with the members orderbook.cpp uses. Iterators are plain pointers.
+template <class T> class vector {
+public:
+    using value_type = T;
+    using iterator = T*;
+    using const_iterator = const T*;
+    vector() = default;
+    vector(size_t n, const T& v) { assign(n, v); }
+    explicit vector(size_t n) { resize(n); }
+    vector(const vector& o) { reserve(o.n_); for (size_t i = 0; i < o.n_; ++i) new (p_ + i) T(o.p_[i]); n_ = o.n_; }
+    vector(vector&& o) noexcept : p_(o.p_), n_(o.n_), cap_(o.cap_) { o.p_ = nullptr; o.n_ = o.cap_ = 0; }
+    vector& operator=(vector o) noexcept { swap(o); return *this; }
+    ~vector() { clear(); free(p_); }
+
+    size_t size() const { return n_; }
+    bool empty() const { return n_ == 0; }
+    T* data() { return p_; }
+    const T* data() const { return p_; }
+    T& operator[](size_t i) { return p_[i]; }
+    const T& operator[](size_t i) const { return p_[i]; }
+    T& back() { return p_[n_ - 1]; }
+    T* begin() { return p_; }
+    T* end() { return p_ + n_; }
+    const T* begin() const { return p_; }
+    const T* end() const { return p_ + n_; }
+
+    void swap(vector& o) noexcept { std::swap(p_, o.p_); std::swap(n_, o.n_); std::swap(cap_, o.cap_); }
+    void clear() { for (size_t i = 0; i < n_; ++i) p_[i].~T(); n_ = 0; }
+    void reserve(size_t c) {
+        if (c <= cap_) return;
+        T* q = static_cast<T*>(malloc(c * sizeof(T)));
+        for (size_t i = 0; i < n_; ++i) { new (q + i) T(std::move(p_[i])); p_[i].~T(); }
+        free(p_);
+        p_ = q;
+        cap_ = c;
+    }
+    void resize(size_t n) { resize(n, T{}); }
+    void resize(size_t n, const T& v) {
+        if (n < n_) { for (size_t i = n; i < n_; ++i) p_[i].~T(); n_ = n; return; }
+        grow(n);
+        for (size_t i = n_; i < n; ++i) new (p_ + i) T(v);
+        n_ = n;
+    }
+    void assign(size_t n, const T& v) { clear(); resize(n, v); }
+    void push_back(const T& v) { grow(n_ + 1); new (p_ + n_) T(v); ++n_; }
+    template <class... A> T& emplace_back(A&&... a) { grow(n_ + 1); new (p_ + n_) T(std::forward<A>(a)...); return p_[n_++]; }
+    void pop_back() { p_[--n_].~T(); }
+
+    // insert count copies of v before pos
+    T* insert(T* pos, size_t count, const T& v) {
+        const size_t at = size_t(pos - p_);
+        open_gap(at, count);
+        for (size_t i = 0; i < count; ++i) new (p_ + at + i) T(v);
+        return p_ + at;
+    }
+    // insert [first, last) before pos; the source must not alias this vector
+    template <class It> T* insert(T* pos, It first, It last) {
+        const size_t at = size_t(pos - p_), count = size_t(last - first);
+        open_gap(at, count);
+        for (size_t i = 0; i < count; ++i, ++first) new (p_ + at + i) T(*first);
+        return p_ + at;
+    }
+
+private:
+    void grow(size_t need) { if (need > cap_) reserve(need < 2 * cap_ ? 2 * cap_ : (need < 8 ? 8 : need)); }
+    void open_gap(size_t at, size_t count) {
+        grow(n_ + count);
+        for (size_t i = n_; i > at; --i) { new (p_ + i - 1 + count) T(std::move(p_[i - 1])); p_[i - 1].~T(); }
+        n_ += count;
+    }
+    T* p_ = nullptr;
+    size_t n_ = 0, cap_ = 0;
+};
+}  // namespace std

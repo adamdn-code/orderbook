@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The matching engine, in your browser · Adam Nguyen</title>
+<meta name="description" content="Place orders against a C++ limit order book compiled to WebAssembly, seeded with Apple's real Nasdaq book. By Adam Nguyen.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The matching engine, in your browser">
+<meta property="og:description" content="Place orders against a C++ limit order book compiled to WebAssembly, seeded with Apple's real Nasdaq book at 1:59:49 pm on 30 January 2019. By Adam Nguyen.">
+<meta property="og:url" content="https://orderbook-eosin.vercel.app/engine.html">
+<meta property="og:image" content="https://orderbook-eosin.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="author" content="Adam Nguyen">
+<link rel="canonical" href="https://orderbook-eosin.vercel.app/engine.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<link rel="stylesheet" href="site.css">
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<style>
+.titleblock { padding: 44px 0 0; }
+.titleblock h1 { max-width: 22ch; }
+.lede-p { font: 400 17px/1.6 var(--serif); max-width: 74ch; margin: 14px 0 0; }
+.floor { display: grid; grid-template-columns: 280px minmax(0, 1fr) 300px; gap: 36px; align-items: start; margin-top: 30px; }
+.ticket { display: flex; flex-direction: column; gap: 14px; }
+.ticket .rhead, .tape-h, .ladder-h { font: 600 15px/1.3 var(--serif); margin: 0; }
+.ticket .group { display: flex; flex-direction: column; gap: 6px; }
+.ticket .glabel { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.ticket .seg { width: 100%; }
+.ticket .seg button { flex: 1; }
+.ticket input[type="number"] {
+  border: 1px solid var(--ink); border-radius: var(--radius); padding: 7px 10px; min-height: 38px; width: 100%;
+  font: 500 15px/1 var(--figures); background: var(--ground);
+}
+.ticket input:disabled { color: #9a9a96; border-color: #c9c9c4; }
+.ticket .btn { justify-content: center; min-height: 42px; font-size: 15px; }
+.status { font-size: 13.5px; min-height: 2.6em; margin: 0; color: var(--ink-2); }
+.status.err { color: var(--pencil); }
+.mine { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); }
+.mine li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--rule-soft); font-size: 13.5px; align-items: center; }
+.mine .what { font-weight: 600; }
+.mine .where { grid-column: 1; color: var(--muted); font-size: 12.5px; }
+.mine button { grid-row: 1 / span 2; grid-column: 2; border: 1px solid var(--ink); background: var(--ground); border-radius: var(--radius); padding: 4px 10px; min-height: 32px; cursor: pointer; font-size: 13px; }
+.mine button:hover { background: var(--shade); }
+.mine .none { color: var(--muted); font-style: italic; display: block; }
+
+.ladder { display: flex; flex-direction: column; font-size: 14px; margin-top: 8px; }
+.ladder .row { display: grid; grid-template-columns: 1fr 104px 1fr; height: 27px; align-items: stretch; }
+.ladder .row > div { display: flex; align-items: center; position: relative; min-width: 0; }
+.ladder .colhead { height: 24px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--ink); margin-bottom: 3px; }
+.ladder .px { justify-content: center; }
+.ladder .px button { border: 0; background: transparent; font: 500 14px/1 var(--figures); padding: 5px 10px; border-radius: var(--radius); cursor: pointer; color: inherit; }
+.ladder .px button:hover { background: var(--shade); }
+.ladder .ask .px { color: var(--ask); } .ladder .bid .px { color: var(--bid); }
+.ladder .best .px button { font-weight: 700; box-shadow: inset 0 0 0 1.5px currentColor; }
+.ladder .qty.l { justify-content: flex-end; padding-right: 8px; }
+.ladder .qty.r { padding-left: 8px; }
+.ladder .depth { position: absolute; top: 4px; bottom: 4px; border-radius: 1px; transition: width 140ms var(--ease-out); }
+.ladder .bid .depth { right: 0; background: color-mix(in srgb, var(--bid) 14%, transparent); }
+.ladder .ask .depth { left: 0; background: color-mix(in srgb, var(--ask) 14%, transparent); }
+.ladder .best.bid .depth { background: color-mix(in srgb, var(--bid) 26%, transparent); }
+.ladder .best.ask .depth { background: color-mix(in srgb, var(--ask) 26%, transparent); }
+.ladder .qtext { position: relative; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ladder .you { position: relative; font: 600 11px/1 var(--ui); color: var(--pencil); border: 1px solid var(--pencil); border-radius: var(--radius); padding: 2px 4px; margin: 0 6px; white-space: nowrap; }
+.ladder .spreadrow { height: 28px; }
+.ladder .spreadrow > div:nth-child(2) { justify-content: center; font-size: 12px; color: var(--ink-2); border-top: 1px dashed var(--rule-soft); border-bottom: 1px dashed var(--rule-soft); }
+.ladder .empty-side { color: var(--muted); font-style: italic; font-size: 13px; justify-content: center; }
+
+.tape { margin: 8px 0 0; padding: 0; list-style: none; max-height: 590px; overflow: hidden; }
+.tape li { display: grid; grid-template-columns: 4.6em 3.2em 1fr auto; gap: 8px; align-items: center; height: 27px; border-bottom: 1px solid var(--rule-soft); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.tape .t { color: var(--muted); }
+.tape .b { color: var(--bid); font-weight: 600; } .tape .s { color: var(--ask); font-weight: 600; }
+.tape .q { text-align: right; }
+.tape .yours { background: color-mix(in srgb, var(--pencil) 7%, transparent); }
+.tape .tag { font: 600 10.5px/1 var(--ui); color: var(--pencil); margin-left: 6px; }
+.tape li.none { display: block; color: var(--muted); font-style: italic; border: 0; height: auto; }
+.floor-bar { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule-soft); font-size: 13.5px; }
+.floor-bar .seg button { min-width: 64px; }
+.floor-bar .stat { color: var(--muted); }
+.speedline { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; }
+#bench-out { font: 400 16px/1.5 var(--serif); }
+#bench-out b { font: 600 22px/1 var(--figures); }
+#err { display: none; margin: 20px 0; padding: 12px 0 12px 16px; border-left: 1px solid var(--pencil); color: var(--pencil); }
+
+@media (max-width: 1100px) {
+  .floor { grid-template-columns: 260px minmax(0, 1fr); }
+  .tape-col { grid-column: 1 / -1; }
+  .tape { max-height: 300px; }
+}
+@media (max-width: 760px) {
+  .floor { grid-template-columns: minmax(0, 1fr); }
+  .ladder-col { order: -1; }
+  .ladder .row { grid-template-columns: 1fr 92px 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <a class="mark" href="index.html"><span class="badge paper">Order book</span><span class="who">Adam Nguyen</span></a>
+  <nav aria-label="Site"><ul class="tabs">
+    <li><a href="index.html">Replay</a></li>
+    <li><a href="playground.html">Playground</a></li>
+    <li><a href="engine.html" aria-current="page">Live engine</a></li>
+    <li><a href="playground.html#method">Method</a></li>
+  </ul></nav>
+  <div class="out"><a href="https://github.com/adamdn-code/orderbook">GitHub</a><a href="https://linkedin.com/in/adam-nguyen-aaba70367">LinkedIn</a><a href="resume.pdf">Resume</a></div>
+</header>
+
+<main class="page">
+  <section class="titleblock">
+    <h1>The matching engine, running in your browser</h1>
+    <p class="lede-p">This is the C++ limit order book from the repository, <code>cpp/src/orderbook.cpp</code> unmodified, compiled to a 16&nbsp;KB WebAssembly module. It starts from Apple's real top-of-book at 1:59:49&nbsp;pm on 30 January 2019, eleven seconds before the Fed statement. Place an order, watch where it joins the queue, and turn on other traders to see it fill.</p>
+  </section>
+
+  <div id="err" role="alert"></div>
+
+  <section class="floor" aria-label="Order entry, book and trades">
+    <form class="ticket" id="ticket" aria-label="Your order" novalidate>
+      <p class="rhead">Your order</p>
+      <div class="group">
+        <span class="glabel" id="side-l">Side</span>
+        <div class="seg" id="side" role="radiogroup" aria-labelledby="side-l">
+          <button type="button" role="radio" data-v="0" aria-checked="true">Buy</button><button type="button" role="radio" data-v="1" aria-checked="false">Sell</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="glabel" id="type-l">Type</span>
+        <div class="seg" id="type" role="radiogroup" aria-labelledby="type-l">
+          <button type="button" role="radio" data-v="0" aria-checked="true">Limit</button><button type="button" role="radio" data-v="1" aria-checked="false">Market</button><button type="button" role="radio" data-v="2" aria-checked="false">IOC</button>
+        </div>
+      </div>
+      <div class="group">
+        <label class="glabel" for="price">Price, $</label>
+        <input type="number" id="price" step="0.01" min="0.01" inputmode="decimal">
+      </div>
+      <div class="group">
+        <label class="glabel" for="qty">Shares</label>
+        <input type="number" id="qty" step="1" min="1" value="100" inputmode="numeric">
+      </div>
+      <button class="btn" type="submit" id="submit">Buy 100</button>
+      <p class="status" id="status" aria-live="polite">Click a price in the book to use it.</p>
+      <div class="group">
+        <span class="glabel">Your resting orders</span>
+        <ul class="mine" id="mine"></ul>
+      </div>
+    </form>
+
+    <figure class="ladder-col" aria-labelledby="cap-l">
+      <p class="ladder-h" id="ladder-h">The book</p>
+      <div class="ladder" id="ladder"></div>
+      <figcaption id="cap-l"><b>Figure 1.</b> Ten price levels a side, read from the engine after every event. Your orders are marked with their place in line. The opening book is Apple's real size at each price; because the snapshot records size per price rather than individual orders, each level starts as lots of up to 100 shares.</figcaption>
+    </figure>
+
+    <div class="tape-col">
+      <p class="tape-h">Trades</p>
+      <ol class="tape" id="tape" aria-live="off"><li class="none">No trades yet.</li></ol>
+    </div>
+  </section>
+
+  <div class="floor-bar">
+    <span class="glabel" id="flow-l">Other traders</span>
+    <div class="seg" id="flow" role="radiogroup" aria-labelledby="flow-l">
+      <button type="button" role="radio" data-v="0" aria-checked="true">Off</button><button type="button" role="radio" data-v="1" aria-checked="false">On</button>
+    </div>
+    <button class="btn quiet" type="button" id="reset">Reset to Apple's book</button>
+    <span class="stat" id="stat"></span>
+  </div>
+  <p class="note">"Other traders" is random flow, not history: about a dozen events a second of limit orders near the touch, cancels, and orders that take liquidity. It exists to move the book so your orders can fill.</p>
+
+  <section class="section" aria-labelledby="speed-h">
+    <h2 id="speed-h">How fast is it here?</h2>
+    <p class="lede">The same benchmark the C++ suite runs natively: random limit orders within ten cents of the mid, with 30% cancels, on a separate book so yours is untouched.</p>
+    <div class="speedline">
+      <button class="btn" type="button" id="bench">Run 1,000,000 orders</button>
+      <p id="bench-out" aria-live="polite" style="margin:0"></p>
+    </div>
+    <p class="note">Natively the book handles 6.1M orders/s on one core of a 2-core cloud VM, with a 99th-percentile latency of 352&nbsp;ns. The WebAssembly build matches the native one trade for trade: one million orders give 557,474 trades in both. <a href="playground.html#engine">How the engine works</a> · <a href="https://github.com/adamdn-code/orderbook/tree/main/cpp/wasm">the WebAssembly build</a>.</p>
+  </section>
+
+  <footer class="foot">
+    <span class="who">Adam Nguyen</span>
+    <span><a href="https://github.com/adamdn-code">github.com/adamdn-code</a> · <a href="https://linkedin.com/in/adam-nguyen-aaba70367">LinkedIn</a> · <a href="resume.pdf">Resume</a></span>
+    <span class="src">Opening book: Nasdaq TotalView-ITCH 5.0 sample, AAPL, 2019-01-30 13:59:49</span>
+  </footer>
+</main>
+
+<script>
+"use strict";
+// Apple's real ten levels a side at 13:59:49 on 2019-01-30, in cents and shares (from the replay data).
+const SEED = {
+  bids: [[16301, 256], [16300, 648], [16297, 200], [16296, 15], [16295, 1], [16294, 1], [16293, 10], [16291, 100], [16290, 32], [16289, 200]],
+  asks: [[16303, 227], [16305, 155], [16306, 305], [16307, 15], [16308, 169], [16309, 12], [16310, 1162], [16311, 264], [16312, 100], [16313, 212]],
+};
+const LEVELS = 10;
+const $ = (id) => document.getElementById(id);
+const usd = (c) => (c / 100).toFixed(2);
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+
+let X, mem, outArr;
+const dec = new TextDecoder();
+const out = () => (outArr && outArr.buffer === mem.buffer ? outArr : (outArr = new Float64Array(mem.buffer, X.ob_out(), 4096)));
+
+// ids: yours count up from 1, the seed book from 1e9, simulated traders from 2e9
+let nextMine = 1, nextSeed = 1e9, nextSim = 2e9;
+const mine = new Map();     // id -> { side, price, qty, remaining }
+const simLive = [];         // simulated traders' resting order ids
+const state = { side: 0, type: 0, flow: false };
+let tape = [], events = 0, timer = null, priceTouched = false;
+
+function check(group, v) {
+  for (const b of group.querySelectorAll("[role=radio]")) {
+    const on = b.dataset.v === String(v);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+  }
+}
+function radios(group, onPick) {
+  group.addEventListener("click", (e) => { const b = e.target.closest("[role=radio]"); if (b) { onPick(+b.dataset.v); check(group, b.dataset.v); } });
+  group.addEventListener("keydown", (e) => {
+    if (!["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    const items = [...group.querySelectorAll("[role=radio]")], i = items.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = items[(i + (e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length];
+    next.focus(); next.click();
+  });
+}
+
+// ---------- engine calls ----------
+function add(id, side, type, qty, price) {
+  const n = X.ob_add(id, side, type, qty, price);
+  events++;
+  const o = out(), fills = [];
+  for (let k = 0; k < n; k++) fills.push({ buy: o[5 * k], sell: o[5 * k + 1], price: o[5 * k + 2], qty: o[5 * k + 3], aggr: o[5 * k + 4] });
+  for (const f of fills) {
+    for (const id2 of [f.buy, f.sell]) {
+      const m = mine.get(id2);
+      if (m && id2 !== id) { m.remaining -= f.qty; if (m.remaining <= 0) mine.delete(id2); }
+    }
+    tape.unshift({ t: new Date(), side: f.aggr, price: f.price, qty: f.qty, yours: f.buy < 1e9 || f.sell < 1e9 });  // your ids are the small ones
+  }
+  if (tape.length > 60) tape.length = 60;
+  return fills;
+}
+function depth(side) {
+  const n = X.ob_depth(side, LEVELS), o = out(), rows = [];
+  for (let k = 0; k < n; k++) rows.push({ p: o[2 * k], q: o[2 * k + 1] });
+  return rows;
+}
+function queue(side, price) {
+  const n = X.ob_level(side, price), o = out(), rows = [];
+  for (let k = 0; k < n; k++) rows.push({ id: o[2 * k], q: o[2 * k + 1] });
+  return rows;
+}
+
+function seed() {
+  X.ob_reset();
+  mine.clear(); simLive.length = 0; tape = []; events = 0;
+  for (const [side, levels] of [[0, SEED.bids], [1, SEED.asks]])
+    for (const [p, q] of levels)
+      for (let left = q; left > 0; left -= 100) add(nextSeed++, side, 0, Math.min(100, left), p);
+  tape = []; events = 0;
+}
+
+// ---------- your order ----------
+function placeholderPrice() {
+  const bb = X.ob_best_bid(), ba = X.ob_best_ask();
+  return state.side === 0 ? (bb > 0 ? bb : ba) : (ba > 0 ? ba : bb);
+}
+function syncTicket() {
+  const market = state.type === 1;
+  $("price").disabled = market;
+  if (!priceTouched || !$("price").value) $("price").value = usd(placeholderPrice());
+  const q = Math.max(0, Math.floor(+$("qty").value || 0));
+  $("submit").textContent = `${state.side === 0 ? "Buy" : "Sell"} ${fmt(q)}${market ? " at market" : ` at $${(+$("price").value || 0).toFixed(2)}`}`;
+}
+function say(text, err = false) { const s = $("status"); s.textContent = text; s.className = "status" + (err ? " err" : ""); }
+
+$("ticket").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const qty = Math.floor(+$("qty").value);
+  const price = Math.round(+$("price").value * 100);
+  if (!(qty > 0)) return say("Shares must be a whole number above zero.", true);
+  if (qty > 1e6) return say("Keep it under a million shares.", true);
+  if (state.type !== 1 && !(price > 0)) return say("Enter a price above zero.", true);
+  const id = nextMine++;
+  let fills;
+  try { fills = add(id, state.side, state.type, qty, state.type === 1 ? 0 : price); }
+  catch (err) { return say(`The engine rejected it: ${err.message}.`, true); }
+  const filled = fills.reduce((s, f) => s + f.qty, 0);
+  const avg = filled ? fills.reduce((s, f) => s + f.qty * f.price, 0) / filled : 0;
+  const rest = state.type === 0 ? qty - filled : 0;
+  if (rest > 0) mine.set(id, { side: state.side, price, qty, remaining: rest });
+  const verb = state.side === 0 ? "Bought" : "Sold";
+  if (filled && rest) say(`${verb} ${fmt(filled)} at an average $${(avg / 100).toFixed(4)}; ${fmt(rest)} rest at $${usd(price)}.`);
+  else if (filled) say(`${verb} ${fmt(filled)} at an average $${(avg / 100).toFixed(4)} in ${fills.length} fill${fills.length > 1 ? "s" : ""}.`);
+  else if (rest) say(`Resting: ${fmt(rest)} at $${usd(price)}. See its place in line below.`);
+  else say(state.type === 1 ? "Nothing to trade against on that side." : "IOC found nothing at that price, so it was cancelled.");
+  render();
+});
+$("price").addEventListener("input", () => { priceTouched = true; syncTicket(); });
+$("qty").addEventListener("input", syncTicket);
+radios($("side"), (v) => { state.side = v; priceTouched = false; syncTicket(); });
+radios($("type"), (v) => { state.type = v; syncTicket(); });
+
+// ---------- other traders ----------
+function simStep() {
+  const bb = X.ob_best_bid(), ba = X.ob_best_ask(), r = Math.random();
+  const side = Math.random() < 0.5 ? 0 : 1;
+  const lot = () => (Math.random() < 0.7 ? 100 * (1 + Math.floor(Math.random() * 3)) : 1 + Math.floor(Math.random() * 99));
+  try {
+    if (bb < 0 || ba < 0 || r < 0.5) {               // a passive order at or behind the touch
+      const s = bb < 0 ? 0 : ba < 0 ? 1 : side;
+      const touch = s === 0 ? (bb > 0 ? bb : ba - 1) : (ba > 0 ? ba : bb + 1);
+      const back = Math.floor(-Math.log(1 - Math.random()) * 1.6);
+      const p = s === 0 ? Math.min(touch - back, ba > 0 ? ba - 1 : Infinity) : Math.max(touch + back, bb > 0 ? bb + 1 : -Infinity);
+      const id = nextSim++;
+      add(id, s, 0, lot(), p);
+      simLive.push(id);
+    } else if (r < 0.8 && simLive.length) {          // a cancel
+      const j = Math.floor(Math.random() * simLive.length);
+      X.ob_cancel(simLive[j]); events++;
+      simLive[j] = simLive[simLive.length - 1]; simLive.pop();
+    } else {                                          // an order that takes liquidity at the touch
+      add(nextSim++, side, 2, lot(), side === 0 ? ba : bb);
+    }
+  } catch (e) { /* a random order the engine refused; skip it */ }
+  if (simLive.length > 4000) simLive.splice(0, 1000);
+  render();
+}
+function scheduleFlow() {
+  clearTimeout(timer);
+  if (!state.flow) return;
+  timer = setTimeout(() => { simStep(); scheduleFlow(); }, -Math.log(1 - Math.random()) * 85);
+}
+radios($("flow"), (v) => { state.flow = v === 1; scheduleFlow(); });
+$("reset").addEventListener("click", () => { seed(); priceTouched = false; say("Back to Apple's book at 1:59:49 pm."); render(); });
+
+// ---------- drawing ----------
+const ladderRows = [];
+function buildLadder() {
+  const L = $("ladder");
+  L.innerHTML = '<div class="row colhead"><div style="justify-content:flex-end;padding-right:8px">Bid size</div><div style="justify-content:center">Price</div><div style="padding-left:8px">Ask size</div></div>';
+  const make = (side, level) => {
+    const row = document.createElement("div");
+    row.className = `row ${side ? "ask" : "bid"}${level === 1 ? " best" : ""}`;
+    row.innerHTML = side
+      ? '<div class="qty l"></div><div class="px"><button type="button"></button></div><div class="qty r"><span class="depth"></span><span class="qtext"></span><span class="you" hidden></span></div>'
+      : '<div class="qty l"><span class="you" hidden></span><span class="depth"></span><span class="qtext"></span></div><div class="px"><button type="button"></button></div><div class="qty r"></div>';
+    const cell = side ? row.children[2] : row.children[0];
+    const r = { row, side, level, btn: row.querySelector("button"), bar: cell.querySelector(".depth"), qtext: cell.querySelector(".qtext"), you: cell.querySelector(".you"), price: 0 };
+    r.btn.addEventListener("click", () => {
+      if (!r.price) return;
+      $("price").value = usd(r.price); priceTouched = true;
+      if (state.type === 1) { state.type = 0; check($("type"), 0); }
+      syncTicket(); $("price").focus();
+    });
+    L.appendChild(row);
+    return r;
+  };
+  for (let lv = LEVELS; lv >= 1; lv--) ladderRows.push(make(1, lv));
+  const sp = document.createElement("div"); sp.className = "row spreadrow";
+  sp.innerHTML = '<div></div><div id="spread"></div><div></div>';
+  L.appendChild(sp);
+  for (let lv = 1; lv <= LEVELS; lv++) ladderRows.push(make(0, lv));
+}
+
+function render() {
+  const bids = depth(0), asks = depth(1);
+  const maxQ = Math.max(1, ...bids.map((r) => r.q), ...asks.map((r) => r.q));
+  const myLevels = new Map();
+  for (const [id, m] of mine) {
+    const k = `${m.side}|${m.price}`;
+    if (!myLevels.has(k)) myLevels.set(k, []);
+    myLevels.get(k).push(id);
+  }
+  for (const r of ladderRows) {
+    const v = (r.side ? asks : bids)[r.level - 1];
+    r.price = v ? v.p : 0;
+    r.btn.textContent = v ? usd(v.p) : "";
+    r.btn.disabled = !v;
+    r.btn.setAttribute("aria-label", v ? `${r.side ? "Ask" : "Bid"} $${usd(v.p)}, ${fmt(v.q)} shares. Use this price.` : "");
+    r.qtext.textContent = v ? fmt(v.q) : "";
+    r.bar.style.width = v ? `${(v.q / maxQ * 100).toFixed(1)}%` : "0";
+    const ids = v ? myLevels.get(`${r.side}|${v.p}`) : null;
+    if (ids) {
+      const q = queue(r.side, v.p), pos = q.findIndex((o) => ids.includes(o.id));
+      const ahead = q.slice(0, pos).reduce((s, o) => s + o.q, 0);
+      r.you.hidden = false;
+      r.you.textContent = `you, ${ordinal(pos + 1)}`;
+      r.you.title = `${fmt(ahead)} shares ahead of you`;
+    } else r.you.hidden = true;
+  }
+  const bb = X.ob_best_bid(), ba = X.ob_best_ask();
+  $("spread").textContent = bb > 0 && ba > 0 ? `spread ${fmt(ba - bb)}¢` : bb > 0 ? "no asks" : ba > 0 ? "no bids" : "empty book";
+  $("ladder-h").textContent = bb > 0 && ba > 0 ? `The book: $${usd(bb)} × $${usd(ba)}` : "The book";
+
+  // your resting orders, with their place in line
+  const list = $("mine");
+  if (!mine.size) list.innerHTML = '<li><span class="none">None. A limit order that does not trade right away rests here.</span></li>';
+  else {
+    list.innerHTML = "";
+    for (const [id, m] of [...mine].sort((a, b) => a[0] - b[0])) {
+      const q = queue(m.side, m.price), pos = q.findIndex((o) => o.id === id);
+      if (pos < 0) { mine.delete(id); continue; }
+      const ahead = q.slice(0, pos).reduce((s, o) => s + o.q, 0);
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="what"></span><span class="where"></span><button type="button">Cancel</button>`;
+      li.querySelector(".what").textContent = `${m.side === 0 ? "Buy" : "Sell"} ${fmt(m.remaining)} at $${usd(m.price)}`;
+      li.querySelector(".where").textContent = `${ordinal(pos + 1)} in line, ${fmt(ahead)} shares ahead`;
+      li.querySelector("button").setAttribute("aria-label", `Cancel ${m.side === 0 ? "buy" : "sell"} ${fmt(m.remaining)} at $${usd(m.price)}`);
+      li.querySelector("button").addEventListener("click", () => {
+        X.ob_cancel(id); events++; mine.delete(id);
+        say(`Cancelled ${m.side === 0 ? "buy" : "sell"} ${fmt(m.remaining)} at $${usd(m.price)}.`); render();
+      });
+      list.appendChild(li);
+    }
+  }
+
+  // trades
+  const T = $("tape");
+  if (!tape.length) T.innerHTML = '<li class="none">No trades yet.</li>';
+  else T.innerHTML = tape.slice(0, 21).map((t) =>
+    `<li class="${t.yours ? "yours" : ""}"><span class="t">${t.t.toTimeString().slice(0, 8)}</span><span class="${t.side === 0 ? "b" : "s"}">${t.side === 0 ? "BUY" : "SELL"}</span><span>$${usd(t.price)}${t.yours ? '<span class="tag">YOU</span>' : ""}</span><span class="q">${fmt(t.qty)}</span></li>`).join("");
+  $("stat").textContent = `${fmt(X.ob_resting())} orders resting · ${fmt(events)} events since the start`;
+  syncTicket();
+}
+
+$("bench").addEventListener("click", () => {
+  const b = $("bench");
+  b.disabled = true; $("bench-out").textContent = "Running…";
+  setTimeout(() => {
+    const t0 = performance.now();
+    const trades = X.ob_bench(1000000, 16300);
+    const s = (performance.now() - t0) / 1000;
+    $("bench-out").innerHTML = `<b>${(1 / s).toFixed(1)}M orders/s</b> in your browser: one million orders in ${(s * 1000).toFixed(0)} ms, ${fmt(trades)} trades.`;
+    b.disabled = false;
+  }, 30);
+});
+
+WebAssembly.instantiateStreaming(fetch("orderbook.wasm"), {
+  env: { ob_fail: (p) => { const u = new Uint8Array(mem.buffer); let e = p; while (u[e]) e++; throw new Error(dec.decode(u.subarray(p, e))); } },
+}).catch(() => fetch("orderbook.wasm").then((r) => r.arrayBuffer()).then((buf) => WebAssembly.instantiate(buf, {
+  env: { ob_fail: (p) => { const u = new Uint8Array(mem.buffer); let e = p; while (u[e]) e++; throw new Error(dec.decode(u.subarray(p, e))); } },
+}))).then(({ instance }) => {
+  X = instance.exports; mem = X.memory;
+  buildLadder(); seed(); render();
+}).catch((e) => { const el = $("err"); el.style.display = "block"; el.textContent = `The engine did not load (${e.message}).`; console.error(e); });
+</script>
+</body>
+</html>

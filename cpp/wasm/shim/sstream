@@ -1,0 +1,11 @@
+#pragma once
+#include <string>
+namespace std {
+class ostringstream {
+public:
+    ostringstream& operator<<(const char* s) { s_ += string(s); return *this; }
+    string str() const { return s_; }
+private:
+    string s_;
+};
+}  // namespace std

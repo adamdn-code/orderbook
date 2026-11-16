@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml/badge.svg)](https://github.com/adamdn-code/orderbook/actions/workflows/ci.yml)
 
-**[Playable working paper](https://orderbook-eosin.vercel.app/playground.html)** · **[Order book replay](https://orderbook-eosin.vercel.app/)** · **[Paper (PDF)](https://orderbook-eosin.vercel.app/paper.pdf)**
+**[Playable working paper](https://orderbook-eosin.vercel.app/playground.html)** · **[Live engine in your browser](https://orderbook-eosin.vercel.app/engine.html)** · **[Order book replay](https://orderbook-eosin.vercel.app/)** · **[Paper (PDF)](https://orderbook-eosin.vercel.app/paper.pdf)**
 
 A C++ limit order book and lock-free matching engine, used to rebuild every stock's book from a full day of Nasdaq's raw TotalView-ITCH feed (368M messages), and then to test a machine-learning market maker on it.
 
@@ -25,6 +25,8 @@ A C++ limit order book and lock-free matching engine, used to rebuild every stoc
 `cpp/` has a C++17 book and a lock-free multithreaded engine, standard library only, with tests under ThreadSanitizer and AddressSanitizer.
 - **Book:** a flat array of price levels with a bitmap of non-empty levels (next best price in one instruction), an order pool linked by index, and an open-addressing id map, so nothing allocates once warm. Against the first `std::map` version: 2.9 → **6.1M orders/s** and p99 1,127 → **352 ns** (2-core VM). A randomized test replays 300k operations through both books and requires identical trades and depth after every step.
 - **Engine:** one matching thread per symbol and one lock-free single-producer/single-consumer ring per client per symbol, so no two threads ever write the same memory. From a mutex-and-future first version to this: 0.20 → **12.8M orders/s** with 8 client threads (64×), round trip p50 291 ns, p99 601 ns.
+
+- **In the browser:** the same `orderbook.cpp`, unmodified, compiles to a 16 KB WebAssembly module with plain clang and a small standard-library shim (`cpp/wasm/`). The [live engine](https://orderbook-eosin.vercel.app/engine.html) lets you trade against Apple's real book; CI checks the wasm build against the native one trade for trade.
 
 See `cpp/README.md` for how each step got there.
 

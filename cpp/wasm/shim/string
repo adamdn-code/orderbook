@@ -1,0 +1,42 @@
+#pragma once
+#include <cstddef>
+#include <cstdint>
+#include <new>
+extern "C" size_t strlen(const char*);
+extern "C" void* memcpy(void*, const void*, size_t);
+namespace std {
+// Only used to build error messages and OrderBook::to_string().
+class string {
+public:
+    string() : string("") {}
+    string(const char* s) : string(s, strlen(s)) {}
+    string(const char* s, size_t n) : n_(n), p_(static_cast<char*>(malloc(n + 1))) { memcpy(p_, s, n); p_[n] = 0; }
+    string(const string& o) : string(o.p_, o.n_) {}
+    string(string&& o) noexcept : n_(o.n_), p_(o.p_) { o.p_ = nullptr; o.n_ = 0; }
+    string& operator=(string o) noexcept { char* t = p_; p_ = o.p_; o.p_ = t; size_t m = n_; n_ = o.n_; o.n_ = m; return *this; }
+    ~string() { free(p_); }
+    const char* c_str() const { return p_ ? p_ : ""; }
+    size_t size() const { return n_; }
+    string& operator+=(const string& o) {
+        char* q = static_cast<char*>(malloc(n_ + o.n_ + 1));
+        memcpy(q, c_str(), n_); memcpy(q + n_, o.c_str(), o.n_); q[n_ + o.n_] = 0;
+        free(p_); p_ = q; n_ += o.n_;
+        return *this;
+    }
+private:
+    size_t n_ = 0;
+    char* p_ = nullptr;
+};
+inline string operator+(string a, const string& b) { a += b; return a; }
+inline string operator+(const char* a, const string& b) { string s(a); s += b; return s; }
+inline string to_string(unsigned long long v) {
+    char buf[24]; int i = 23; buf[i] = 0;
+    do { buf[--i] = char('0' + v % 10); v /= 10; } while (v);
+    return string(buf + i);
+}
+inline string to_string(long long v) { return v < 0 ? "-" + to_string((unsigned long long)(-(v + 1)) + 1) : to_string((unsigned long long)v); }
+inline string to_string(unsigned long v) { return to_string((unsigned long long)v); }
+inline string to_string(long v) { return to_string((long long)v); }
+inline string to_string(int v) { return to_string((long long)v); }
+inline string to_string(unsigned v) { return to_string((unsigned long long)v); }
+}  // namespace std

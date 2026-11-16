@@ -1,0 +1,5 @@
+// Freestanding shim: just enough of the C++ standard library to compile cpp/src/orderbook.cpp
+// to WebAssembly without a libc++ for wasm. See ../README.md.
+#pragma once
+#include <stddef.h>
+namespace std { using ::size_t; using ::ptrdiff_t; using nullptr_t = decltype(nullptr); }

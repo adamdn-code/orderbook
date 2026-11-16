@@ -36,6 +36,19 @@ jobs:
       - run: ./build/tests
       - run: cd cpp && ../build/itch_tests
 
+  wasm:
+    name: Order book in WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update -q && sudo apt-get install -y clang lld
+      - name: Build docs/orderbook.wasm and check it against the native build
+        working-directory: cpp
+        run: make wasm-test
+
   python:
     name: Python tests
     runs-on: ubuntu-latest

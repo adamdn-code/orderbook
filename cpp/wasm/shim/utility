@@ -1,0 +1,15 @@
+#pragma once
+#include <cstddef>
+namespace std {
+template <class T> struct remove_reference { using type = T; };
+template <class T> struct remove_reference<T&> { using type = T; };
+template <class T> struct remove_reference<T&&> { using type = T; };
+template <class T> constexpr typename remove_reference<T>::type&& move(T&& t) noexcept {
+    return static_cast<typename remove_reference<T>::type&&>(t);
+}
+template <class T> constexpr T&& forward(typename remove_reference<T>::type& t) noexcept { return static_cast<T&&>(t); }
+template <class T> constexpr T&& forward(typename remove_reference<T>::type&& t) noexcept { return static_cast<T&&>(t); }
+template <class T> void swap(T& a, T& b) noexcept { T t = move(a); a = move(b); b = move(t); }
+// an aggregate, so structured bindings and parenthesized init (emplace_back(a, b)) work in C++20
+template <class A, class B> struct pair { A first; B second; };
+}  // namespace std
