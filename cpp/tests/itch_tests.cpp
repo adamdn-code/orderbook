@@ -1,6 +1,7 @@
 // Tests for the ITCH reader and replayer, using synthetic ITCH 5.0 files
 // written byte for byte to the spec.
 #include "itch.hpp"
+#include "parallel.hpp"
 #include "replay.hpp"
 
 #include <algorithm>
@@ -515,6 +516,132 @@ static void random_feed_matches_independent_truth() {
     CHECK(rep.live_orders() == live.size());
 }
 
+// The multithreaded replay must give exactly the single-threaded results: every count, every
+// stock's summary, and byte-identical CSVs for the tracked stock. The feed mixes many stocks,
+// sub-dollar stocks (tick book), unknown references, hidden trades, crosses and a malformed message.
+static std::string slurp(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+static bool same_counts(const Counts& a, const Counts& b) {
+    const double tol = 1e-9 * std::max(1.0, a.notional);
+    return a.adds == b.adds && a.executions == b.executions && a.executions_front == b.executions_front &&
+           a.executions_best == b.executions_best && a.executions_priced == b.executions_priced &&
+           a.cancels == b.cancels && a.deletes == b.deletes && a.replaces == b.replaces &&
+           a.hidden_trades == b.hidden_trades && a.crosses == b.crosses && a.shares_traded == b.shares_traded &&
+           a.notional - b.notional < tol && b.notional - a.notional < tol && a.missing_refs == b.missing_refs &&
+           a.over_executions == b.over_executions && a.crossing_adds == b.crossing_adds &&
+           a.side_table_adds == b.side_table_adds && a.switched_books == b.switched_books;
+}
+
+static void parallel_replay_matches_serial() {
+    Writer w;
+    std::mt19937_64 rng(11);
+    const int stocks = 37;
+    std::vector<std::vector<std::uint64_t>> live(stocks + 1);
+    std::vector<std::uint32_t> mid(stocks + 1);
+    for (int k = 1; k <= stocks; ++k) {
+        w.directory(std::uint16_t(k), "S" + std::to_string(k));
+        mid[k] = k % 7 == 0 ? usd(0.4) : usd(20.0 + k);  // every 7th stock trades under $1
+    }
+    std::uint64_t next_ref = 1, ts = 0;
+    for (int step = 0; step < 120'000; ++step) {
+        ts += 997;
+        const int k = 1 + int(rng() % stocks);
+        auto& refs = live[k];
+        const int op = int(rng() % 100);
+        const std::uint32_t tick = mid[k] < usd(1.0) ? 1 : 100;  // sub-penny steps under $1
+        if (op < 45 || refs.empty()) {
+            const bool buy = rng() % 2;
+            const std::uint32_t off = tick * std::uint32_t(1 + rng() % 6);
+            w.add(std::uint16_t(k), "S" + std::to_string(k), ts, next_ref, buy, 100 * std::uint32_t(1 + rng() % 4),
+                  buy ? mid[k] - off : mid[k] + off, rng() % 5 == 0);
+            refs.push_back(next_ref++);
+        } else if (op < 60) {
+            w.executed(std::uint16_t(k), ts, refs[rng() % refs.size()], 100);
+        } else if (op < 70) {
+            w.cancel(std::uint16_t(k), ts, refs[rng() % refs.size()], 50);
+        } else if (op < 82) {
+            const std::size_t j = rng() % refs.size();
+            w.del(std::uint16_t(k), ts, refs[j]);
+            refs[j] = refs.back();
+            refs.pop_back();
+        } else if (op < 90) {
+            const std::size_t j = rng() % refs.size();
+            w.replace(std::uint16_t(k), ts, refs[j], next_ref, 200, mid[k] + tick * std::uint32_t(2 + rng() % 4));
+            refs[j] = next_ref++;
+        } else if (op < 95) {
+            w.trade(std::uint16_t(k), "S" + std::to_string(k), ts, 100, mid[k]);
+        } else if (op < 97) {
+            w.del(std::uint16_t(k), ts, next_ref + 1'000'000);  // names an order nobody has
+        } else {
+            w.cross(std::uint16_t(k), "S" + std::to_string(k), ts, 500, mid[k]);
+        }
+    }
+    w.bytes.push_back(0);  // a malformed message: length 2, too short for any type
+    w.bytes.push_back(2);
+    w.bytes.push_back('A');
+    w.bytes.push_back(0);
+    w.save(tmp("multi.itch"), false);
+
+    auto options = [](const std::string& dir) {
+        ReplayOptions o;
+        o.track = "S12";
+        o.depth = 5;
+        o.events = true;
+        o.sample_ns = 50'000'000;
+        o.out_dir = dir;
+        std::filesystem::create_directories(dir);
+        return o;
+    };
+    Counts serial_totals;
+    std::uint64_t serial_messages = 0, serial_malformed = 0, serial_live = 0;
+    std::array<std::uint64_t, 256> serial_types{};
+    std::vector<SymbolSummary> serial_sums;
+    {
+        Replayer r = replay_file(tmp("multi.itch"), options("build/serial"));
+        serial_totals = r.totals();
+        serial_messages = r.messages();
+        serial_malformed = r.malformed();
+        serial_live = r.live_orders();
+        serial_types = r.by_type();
+        serial_sums = r.summaries();
+    }
+    auto by_symbol = [](std::vector<SymbolSummary> v) {
+        std::sort(v.begin(), v.end(), [](const SymbolSummary& a, const SymbolSummary& b) { return a.symbol < b.symbol; });
+        return v;
+    };
+    serial_sums = by_symbol(serial_sums);
+    CHECK(serial_totals.missing_refs > 0 && serial_totals.hidden_trades > 0 && serial_totals.crosses > 0);
+    CHECK(serial_malformed == 1);
+
+    for (unsigned threads : {2u, 3u, 8u}) {
+        const std::string dir = "build/parallel" + std::to_string(threads);
+        {
+            ParallelReplayer p(options(dir), threads);
+            Reader reader(tmp("multi.itch"), 64);
+            reader.for_each([&](const std::uint8_t* m, std::size_t n) { p.apply(m, n); });
+            p.finish();
+            CHECK(same_counts(p.totals(), serial_totals));
+            CHECK(p.messages() == serial_messages);
+            CHECK(p.malformed() == serial_malformed);
+            CHECK(p.live_orders() == serial_live);
+            CHECK(p.by_type() == serial_types);
+            const auto sums = by_symbol(p.summaries());
+            bool same = sums.size() == serial_sums.size();
+            for (std::size_t i = 0; same && i < sums.size(); ++i)
+                same = sums[i].symbol == serial_sums[i].symbol && same_counts(sums[i].counts, serial_sums[i].counts) &&
+                       sums[i].resting_at_close == serial_sums[i].resting_at_close;
+            CHECK(same);
+        }  // closes the CSVs
+        for (const char* f : {"S12_book.csv", "S12_trades.csv", "S12_events.csv"}) {
+            const std::string a = slurp("build/serial/" + std::string(f)), b = slurp(dir + "/" + f);
+            CHECK(!a.empty() && a == b);
+        }
+    }
+}
+
 int main() {
     std::filesystem::create_directories("build");  // test files go in ./build
     const std::pair<const char*, void (*)()> tests[] = {
@@ -532,6 +659,7 @@ int main() {
         {"malformed_length_is_counted", malformed_length_is_counted},
         {"symbol_filter_and_tracking_csv", symbol_filter_and_tracking_csv},
         {"random_feed_matches_independent_truth", random_feed_matches_independent_truth},
+        {"parallel_replay_matches_serial", parallel_replay_matches_serial},
     };
     for (auto& [name, fn] : tests) {
         const int before = g_failed;

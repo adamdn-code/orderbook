@@ -26,7 +26,7 @@ target_link_libraries(bench orderbook reference_book)
 
 find_package(ZLIB)
 if(ZLIB_FOUND)
-  add_library(itch_replay_lib itch/replay.cpp)
+  add_library(itch_replay_lib itch/replay.cpp itch/parallel.cpp)
   target_include_directories(itch_replay_lib PUBLIC itch)
   target_link_libraries(itch_replay_lib PUBLIC orderbook reference_book ZLIB::ZLIB)
 

@@ -73,7 +73,7 @@ python3 cpp/itch/plot_symbol.py AAPL --dir ~/itch     # -> ~/itch/AAPL_day.png
 ./cpp/build/itch_replay ~/itch/01302019.NASDAQ_ITCH50.gz --track AAPL --depth 10 --out ~/itch | tee ~/itch/run.txt
 python3 cpp/itch/make_viewer.py AAPL --dir ~/itch --date 2019-01-30 --summary ~/itch/run.txt --out docs/index.html
 ```
-Options: `--symbols AAPL,MSFT` rebuilds only those books (faster), `--track SYM` writes that stock's book and trades to CSV, `--depth N` records N price levels per side instead of just the best, and `--sample-ms N` sets how often the book is sampled.
+Options: `--threads N` rebuilds stocks on N threads (see below), `--symbols AAPL,MSFT` rebuilds only those books (faster), `--track SYM` writes that stock's book and trades to CSV, `--depth N` records N price levels per side instead of just the best, and `--sample-ms N` sets how often the book is sampled.
 
 ## What it checks
 Nasdaq did the matching, so ITCH is a log of its book changing. If the rebuilt book is right:
@@ -104,4 +104,19 @@ The tool reports each of these as a count or percentage. It also reports through
 A randomized test generates 60k messages from an independently tracked "true" book. It requires the replay to match that book's best bid and ask at every checkpoint, with zero inconsistencies and 100% of executions at the front of the queue.
 
 ## Speed
-The real day above ran at 0.66–0.75M messages/s (8–9 minutes) on a laptop under WSL. On a synthetic 40M-message file (2-core cloud VM), reading and decoding alone runs at 10.5M messages/s and the full replay at 2.0–2.5M messages/s. So the time goes to the book updates, which are spread across 8,695 books and over a million resting orders, so most lookups miss the CPU cache. Batching each stock's messages, or splitting stocks across threads (each stock's book is independent), are the obvious next speedups.
+The real day above ran at 0.66–0.75M messages/s (8–9 minutes) on a laptop under WSL. On a synthetic 40M-message file (2-core cloud VM), reading and decoding alone runs at 10.5M messages/s and the full replay at 2.0–2.5M messages/s. So the time goes to the book updates, which are spread across 8,695 books and over a million resting orders, so most lookups miss the CPU cache.
+
+### Multithreaded replay (`--threads N`)
+Each stock's book is independent and every book message carries its stock's locate code, so `--threads N` splits stocks across N worker threads (`parallel.cpp`). The reading thread copies each message into a 256 KiB batch for the worker that owns its stock; full batches go over the repo's lock-free single-producer/single-consumer ring and come back empty over a second one, so nothing is allocated after start-up. Each worker is an ordinary `Replayer` that sees its stocks' messages in feed order.
+
+The output is identical to the single-threaded replay: every count and check, every stock's summary, and the tracked stock's CSVs byte for byte (`parallel_replay_matches_serial` in `tests/itch_tests.cpp`, also run under ThreadSanitizer). The one exception is the peak number of orders resting at once across all stocks, which the threads reach at different moments; with `--threads` it is reported as an upper bound.
+
+On a synthetic 20M-message, 4,000-stock feed (`make itch-bench`) on a 2-core cloud VM:
+
+| Threads | Messages/s |
+|---|---|
+| 1 | 2.1M |
+| 2 | 3.5M |
+| 3 | 4.0M |
+
+That is 1.9× on two cores. With more cores the limit becomes the single reading thread, which decodes plain files at about 10M messages/s; decompressing a gzipped file is slower, so unzip the day first for the fastest run.

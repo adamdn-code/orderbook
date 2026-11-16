@@ -9,7 +9,7 @@ PY_INCLUDE = $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_paths()
 PY_SUFFIX = $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
 PY_EXT = build/obfast$(PY_SUFFIX)
 
-ITCH_SRC = itch/replay.cpp src/orderbook.cpp tests/reference_book.cpp
+ITCH_SRC = itch/replay.cpp itch/parallel.cpp src/orderbook.cpp tests/reference_book.cpp
 
 all: build/tests build/bench build/itch_replay build/itch_tests
 
@@ -52,13 +52,23 @@ bench: build/bench
 tsan: | build
 	$(CXX) -std=c++17 -O1 -g -fsanitize=thread -Iinclude -Itests -pthread tests/tests.cpp $(SRC) $(REF) -o build/tests_tsan
 	./build/tests_tsan
+	$(CXX) -std=c++17 -O1 -g -fsanitize=thread -Iinclude -Itests -Iitch -pthread tests/itch_tests.cpp $(ITCH_SRC) -lz -o build/itch_tests_tsan
+	./build/itch_tests_tsan
 
 # Run the tests under AddressSanitizer + UBSan to catch memory and arithmetic bugs.
 asan: | build
 	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -Iinclude -Itests -pthread tests/tests.cpp $(SRC) $(REF) -o build/tests_asan
 	./build/tests_asan
-	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -Iinclude -Itests -Iitch tests/itch_tests.cpp $(ITCH_SRC) -lz -o build/itch_tests_asan
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -Iinclude -Itests -Iitch -pthread tests/itch_tests.cpp $(ITCH_SRC) -lz -o build/itch_tests_asan
 	./build/itch_tests_asan
+
+# Multithreaded replay benchmark on a synthetic 20M-message, 4,000-stock feed (about 600 MB in build/)
+build/itch_synth: bench/itch_synth.cpp | build
+	$(CXX) -std=c++17 -O2 bench/itch_synth.cpp -o $@
+
+itch-bench: build/itch_replay build/itch_synth
+	test -f build/synth.itch || ./build/itch_synth build/synth.itch 20000000 4000
+	for t in 1 2 4 8; do ./build/itch_replay build/synth.itch --threads $$t 2>/dev/null | grep "messages/s"; done
 
 # WebAssembly build of the book for docs/engine.html (needs clang and lld; see wasm/README.md)
 wasm:
@@ -74,4 +84,4 @@ clean:
 	rm -rf build
 
 PHONY_ML = ml
-.PHONY: all python itch ml test bench tsan asan clean wasm wasm-test
+.PHONY: all python itch ml test bench tsan asan clean wasm wasm-test itch-bench
