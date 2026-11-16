@@ -1,0 +1,386 @@
+{
+ "schemaVersion": 2,
+ "generatedAt": "2026-11-16T00:57:28+00:00",
+ "title": "Design System: Order Book",
+ "extensions": {
+  "colorMeta": {
+   "card-stock": {
+    "role": "neutral",
+    "displayName": "Card Stock",
+    "canonical": "#e8e9e4",
+    "tonalRamp": [
+     "#282924",
+     "#42443b",
+     "#5e6152",
+     "#797e68",
+     "#9a9e8a",
+     "#bbbdb2",
+     "#dadbd6",
+     "#f3f3f2"
+    ]
+   },
+   "card": {
+    "role": "neutral",
+    "displayName": "Card",
+    "canonical": "#f6f6f2",
+    "tonalRamp": [
+     "#2a2a22",
+     "#484838",
+     "#67674c",
+     "#86865f",
+     "#a6a682",
+     "#c1c1ae",
+     "#ddddd5",
+     "#f3f3f1"
+    ]
+   },
+   "ink": {
+    "role": "neutral",
+    "displayName": "Ink",
+    "canonical": "#15171a",
+    "tonalRamp": [
+     "#242629",
+     "#3b3f44",
+     "#515861",
+     "#67707e",
+     "#8a929e",
+     "#b2b6bd",
+     "#d6d8db",
+     "#f2f2f3"
+    ]
+   },
+   "ink-2": {
+    "role": "neutral",
+    "displayName": "Ink Two",
+    "canonical": "#3f444a",
+    "tonalRamp": [
+     "#242628",
+     "#3c3f43",
+     "#53595f",
+     "#6a727b",
+     "#8c939c",
+     "#b3b7bc",
+     "#d7d9db",
+     "#f2f2f3"
+    ]
+   },
+   "muted": {
+    "role": "neutral",
+    "displayName": "Muted",
+    "canonical": "#575d64",
+    "tonalRamp": [
+     "#252628",
+     "#3d4043",
+     "#54595e",
+     "#6b727a",
+     "#8d939b",
+     "#b4b7bb",
+     "#d7d9da",
+     "#f2f2f3"
+    ]
+   },
+   "rule": {
+    "role": "neutral",
+    "displayName": "Rule",
+    "canonical": "#c6c8c1",
+    "tonalRamp": [
+     "#272825",
+     "#41423d",
+     "#5b5e55",
+     "#76796c",
+     "#969a8e",
+     "#b9bbb4",
+     "#d9dad7",
+     "#f2f3f2"
+    ]
+   },
+   "rule-soft": {
+    "role": "neutral",
+    "displayName": "Soft Rule",
+    "canonical": "#d8d9d3",
+    "tonalRamp": [
+     "#272825",
+     "#42433c",
+     "#5d5f54",
+     "#787b6b",
+     "#999b8d",
+     "#babbb4",
+     "#dadad7",
+     "#f3f3f2"
+    ]
+   },
+   "kelly-jacket": {
+    "role": "primary",
+    "displayName": "Kelly Jacket",
+    "canonical": "#17803d",
+    "tonalRamp": [
+     "#173622",
+     "#215f37",
+     "#268c4b",
+     "#28be5e",
+     "#51d781",
+     "#93dcae",
+     "#c9e8d4",
+     "#eef6f1"
+    ]
+   },
+   "royal-jacket": {
+    "role": "primary",
+    "displayName": "Royal Jacket",
+    "canonical": "#1d4dbf",
+    "tonalRamp": [
+     "#162037",
+     "#1f3261",
+     "#23438f",
+     "#2352c2",
+     "#4d77db",
+     "#91a8de",
+     "#c8d2e9",
+     "#eef0f7"
+    ]
+   },
+   "goldenrod-jacket": {
+    "role": "primary",
+    "displayName": "Goldenrod Jacket",
+    "canonical": "#e3a50f",
+    "tonalRamp": [
+     "#3a2e13",
+     "#675019",
+     "#997419",
+     "#d19a14",
+     "#e9b73f",
+     "#e6cb8a",
+     "#ece1c5",
+     "#f7f4ed"
+    ]
+   },
+   "vermilion-jacket": {
+    "role": "primary",
+    "displayName": "Vermilion Jacket",
+    "canonical": "#c8361a",
+    "tonalRamp": [
+     "#371b15",
+     "#62281d",
+     "#923321",
+     "#c63a20",
+     "#de6149",
+     "#e09c8f",
+     "#eacdc8",
+     "#f7efee"
+    ]
+   },
+   "graphite-jacket": {
+    "role": "primary",
+    "displayName": "Graphite Jacket",
+    "canonical": "#3b4046",
+    "tonalRamp": [
+     "#242628",
+     "#3c3f44",
+     "#53595f",
+     "#6a727c",
+     "#8c939c",
+     "#b3b7bc",
+     "#d7d9db",
+     "#f2f2f3"
+    ]
+   },
+   "better": {
+    "role": "state",
+    "displayName": "Better",
+    "canonical": "#146b33",
+    "tonalRamp": [
+     "#173522",
+     "#215e37",
+     "#278b4b",
+     "#29bd5e",
+     "#52d681",
+     "#94dcad",
+     "#cae8d4",
+     "#eef6f1"
+    ]
+   },
+   "worse": {
+    "role": "state",
+    "displayName": "Worse",
+    "canonical": "#b23415",
+    "tonalRamp": [
+     "#381c15",
+     "#632a1d",
+     "#933620",
+     "#c83f1e",
+     "#e06648",
+     "#e19f8e",
+     "#eacec7",
+     "#f7efee"
+    ]
+   }
+  },
+  "typographyMeta": {
+   "display": {
+    "displayName": "Display",
+    "purpose": "Page titles only, uppercase."
+   },
+   "headline": {
+    "displayName": "Headline",
+    "purpose": "Section and panel headings, uppercase."
+   },
+   "title": {
+    "displayName": "Title",
+    "purpose": "Panel sub-headings and filter names."
+   },
+   "body": {
+    "displayName": "Body",
+    "purpose": "Running text, 68-75ch, tabular figures."
+   },
+   "figures": {
+    "displayName": "Figures",
+    "purpose": "Result strip and replay board numbers."
+   },
+   "label": {
+    "displayName": "Label",
+    "purpose": "Field labels, table headers, axis text."
+   },
+   "badge": {
+    "displayName": "Badge",
+    "purpose": "Pit badges: strategy, trade-type and moment acronyms."
+   }
+  },
+  "shadows": [],
+  "motion": [
+   {
+    "name": "ease-out",
+    "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+    "purpose": "Control background transitions (120ms) and depth-bar width (160ms)."
+   },
+   {
+    "name": "line-reveal",
+    "value": "520ms, 1 - (1 - x)^4",
+    "purpose": "The selected strategy's afternoon line draws in when a setting changes."
+   },
+   {
+    "name": "ladder-flash",
+    "value": "700ms goldenrod to transparent",
+    "purpose": "A changed depth quantity during replay playback."
+   }
+  ],
+  "breakpoints": [
+   {
+    "name": "desk-two-column",
+    "value": "1240px"
+   },
+   {
+    "name": "replay-two-column",
+    "value": "1100px"
+   },
+   {
+    "name": "stack",
+    "value": "860px"
+   },
+   {
+    "name": "replay-stack",
+    "value": "760px"
+   }
+  ]
+ },
+ "components": [
+  {
+   "name": "Pit badges",
+   "kind": "chip",
+   "refersTo": "badge-nxt",
+   "description": "The signature: one jacket colour and acronym per strategy, used in controls, legends, tables and chart labels.",
+   "html": "<span class=\"ds-badge ds-off\">OFF</span> <span class=\"ds-badge ds-imb\">IMB</span> <span class=\"ds-badge ds-nxt\">NXT</span> <span class=\"ds-badge ds-lat\">LAT</span> <span class=\"ds-badge ds-tox\">TOX</span>",
+   "css": ".ds-badge{display:inline-flex;align-items:center;justify-content:center;min-width:2.7em;height:1.55em;padding:0 .42em;border-radius:3px;color:#fff;font:900 13px/1 'Archivo Badge','Archivo','Arial Narrow',sans-serif;letter-spacing:.06em;text-transform:uppercase}.ds-imb{background:#e3a50f;color:#15171a}.ds-nxt{background:#17803d}.ds-lat{background:#1d4dbf}.ds-tox{background:#c8361a}.ds-off{background:#3b4046}"
+  },
+  {
+   "name": "Primary button",
+   "kind": "button",
+   "refersTo": "button-primary",
+   "description": "Ink-filled action, e.g. Play.",
+   "html": "<button class=\"ds-btn\"><svg viewBox=\"0 0 12 12\" width=\"12\" height=\"12\" aria-hidden=\"true\"><path d=\"M2.5 1.2v9.6L10.6 6z\" fill=\"currentColor\"/></svg>Play</button>",
+   "css": ".ds-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid #15171a;background:#15171a;color:#fff;border-radius:4px;padding:7px 14px;min-height:36px;font:600 14px 'Archivo',sans-serif;cursor:pointer}.ds-btn:hover{background:#2b2e33}.ds-btn:focus-visible{outline:2px solid #1d4dbf;outline-offset:2px}"
+  },
+  {
+   "name": "Quiet button",
+   "kind": "button",
+   "refersTo": "button-quiet",
+   "description": "Secondary action on card fill.",
+   "html": "<button class=\"ds-btn-q\">Use the tuning-hour pick</button>",
+   "css": ".ds-btn-q{border:1px solid #15171a;background:#f6f6f2;color:#15171a;border-radius:4px;padding:7px 14px;min-height:36px;font:600 14px 'Archivo',sans-serif;cursor:pointer}.ds-btn-q:hover{background:#e2e3dc}.ds-btn-q:focus-visible{outline:2px solid #1d4dbf;outline-offset:2px}"
+  },
+  {
+   "name": "Segmented control",
+   "kind": "custom",
+   "refersTo": "segment-selected",
+   "description": "Radio group of options inside one ink border; selected segment is ink-filled.",
+   "html": "<div class=\"ds-seg\" role=\"radiogroup\"><button role=\"radio\" aria-checked=\"true\">0</button><button role=\"radio\" aria-checked=\"false\">100 µs</button><button role=\"radio\" aria-checked=\"false\">1 ms</button><button role=\"radio\" aria-checked=\"false\">10 ms</button></div>",
+   "css": ".ds-seg{display:inline-flex;border:1px solid #15171a;border-radius:4px;overflow:hidden;background:#f6f6f2}.ds-seg button{border:0;border-right:1px solid #15171a;background:transparent;padding:6px 11px;min-height:34px;font:500 13.5px 'Archivo',sans-serif;color:#15171a;cursor:pointer}.ds-seg button:last-child{border-right:0}.ds-seg button:hover:not([aria-checked=true]){background:#e2e3dc}.ds-seg button[aria-checked=true]{background:#15171a;color:#fff}.ds-seg button:focus-visible{outline:2px solid #1d4dbf;outline-offset:-4px}.ds-seg button[aria-checked=true]:focus-visible{outline-color:#e3a50f}"
+  },
+  {
+   "name": "Navigation bar",
+   "kind": "nav",
+   "refersTo": "panel",
+   "description": "Sticky ink bar with the paper site badge, tabs with a goldenrod active underline, and owner links.",
+   "html": "<nav class=\"ds-bar\"><span class=\"ds-mark\">Order book</span><a href=\"#\">Replay</a><a href=\"#\" aria-current=\"page\">Playground</a><a href=\"#\">Method</a><span class=\"ds-out\"><a href=\"#\">GitHub</a></span></nav>",
+   "css": ".ds-bar{display:flex;align-items:stretch;gap:18px;background:#15171a;color:#fff;padding:0 24px;min-height:56px;font:500 14.5px 'Archivo',sans-serif}.ds-bar a{display:flex;align-items:center;color:#d9dbd5;text-decoration:none;border-bottom:4px solid transparent;border-top:4px solid transparent}.ds-bar a:hover{color:#fff}.ds-bar a[aria-current=page]{color:#fff;border-bottom-color:#e3a50f}.ds-mark{align-self:center;background:#f6f6f2;color:#15171a;box-shadow:inset 0 0 0 1.5px #15171a;border-radius:3px;padding:3px 7px;font:900 15px/1 'Archivo Badge','Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase}.ds-out{margin-left:auto;display:flex}"
+  },
+  {
+   "name": "Panel with table",
+   "kind": "card",
+   "refersTo": "panel",
+   "description": "Card-fill panel with a tabular-figures table and badge row labels.",
+   "html": "<div class=\"ds-panel\"><table><thead><tr><th>Filter</th><th>Rate</th><th>PnL</th></tr></thead><tbody><tr><td><span class=\"ds-b\" style=\"background:#3b4046\">OFF</span></td><td>–</td><td>−$1,147</td></tr><tr><td><span class=\"ds-b\" style=\"background:#17803d\">NXT</span></td><td>20%</td><td>−$470</td></tr></tbody></table></div>",
+   "css": ".ds-panel{background:#f6f6f2;border:1px solid #c6c8c1;border-radius:4px;padding:16px 18px;font:400 13.5px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:#15171a}.ds-panel table{border-collapse:collapse;width:100%}.ds-panel th,.ds-panel td{text-align:right;padding:6px 8px;border-bottom:1px solid #d8d9d3}.ds-panel th:first-child,.ds-panel td:first-child{text-align:left;padding-left:0}.ds-panel thead th{color:#575d64;font-weight:500;font-size:12.5px;border-bottom:1px solid #15171a}.ds-b{display:inline-flex;align-items:center;justify-content:center;min-width:2.7em;height:1.55em;padding:0 .42em;border-radius:3px;color:#fff;font:900 13px/1 'Archivo Badge','Archivo',sans-serif;letter-spacing:.06em}"
+  }
+ ],
+ "narrative": {
+  "northStar": "The Pit, Rebuilt",
+  "overview": "Electronic matching engines replaced the Chicago open-outcry pits. This site shows one of those engines, and it wears the pit's identity system: traders in solid firm-coloured jackets, each carrying a badge with a short block-lettered acronym, on a floor of paper trading cards. The world lends four things and only four: the card-stock ground, the jacket colours, the heavy condensed badge lettering, and the badge itself as a recurring label. Layout, navigation and controls stay those of a clean working web tool.\n\nDensity is a working screen's density: tables with tabular figures, charts with direct labels, controls a visitor already knows how to use. Colour does jobs. Each strategy owns one jacket colour everywhere it appears, so a visitor learns the cast once and reads every chart and table after that by colour and acronym.\n\nThe category default this system refuses is the dark trading terminal of green and red on charcoal. The ground is light because the work is read in daylight, from a resume link on a laptop or a phone.",
+  "keyCharacteristics": [
+   "Card-stock grey ground with ink-black rules and type; panels a shade lighter than the ground.",
+   "Four saturated jacket colours plus graphite, each bound to one strategy for the life of the site.",
+   "Heavy extra-condensed capitals for badges and headings; a plain grotesque for everything else.",
+   "Pit badges as the signature: the same chip in controls, legends, table headers, table rows and chart labels.",
+   "Flat surfaces with hairline borders; no shadows."
+  ],
+  "rules": [
+   {
+    "name": "The One Jacket Rule",
+    "body": "A strategy's colour never changes and is never borrowed. Kelly is NXT, royal is LAT, goldenrod is IMB, vermilion is TOX, graphite is OFF, on every page and in every chart.",
+    "section": "colors"
+   },
+   {
+    "name": "The Sides Rule",
+    "body": "On the order book, bids are royal and asks are vermilion. Green-versus-red for buy and sell is the terminal default this world refuses.",
+    "section": "colors"
+   },
+   {
+    "name": "The Tabular Rule",
+    "body": "Every number on the site uses tabular figures (`font-variant-numeric: tabular-nums` on the body), so columns align and live numbers don't jitter.",
+    "section": "typography"
+   },
+   {
+    "name": "The Caps Belong To Badges Rule",
+    "body": "Uppercase is for display titles, headings and badges. Labels, buttons and body text stay in sentence case.",
+    "section": "typography"
+   },
+   {
+    "name": "The Flat Floor Rule",
+    "body": "Surfaces never lift. A state change shows as an ink border, an ink fill or a goldenrod mark, never as a shadow.",
+    "section": "elevation"
+   }
+  ],
+  "dos": [
+   "**Do** give every new strategy or series its own jacket colour and badge, and use that pair everywhere it appears.",
+   "**Do** label chart lines directly with badges at their ends rather than with a separate legend.",
+   "**Do** keep numbers in tabular figures and right-aligned in tables.",
+   "**Do** put goldenrod badges on ink text only (8.3:1); white on goldenrod fails contrast.",
+   "**Do** keep the ground card-stock grey (#e8e9e4); panels one step lighter (#f6f6f2)."
+  ],
+  "donts": [
+   "**Don't** use green and red for buy and sell; bids are royal, asks are vermilion.",
+   "**Don't** add shadows, gradients or glass; the floor is flat.",
+   "**Don't** set labels, buttons or body text in capitals; caps belong to display, headings and badges.",
+   "**Don't** let the pit world supply layout or controls: no jacket textures, no trading-card frames, no hand-signal pictograms on the working screens."
+  ]
+ }
+}

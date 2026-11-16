@@ -3,299 +3,388 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Market-Making Strategy Playground · AAPL</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<title>Strategy playground · Order book · Adam Nguyen</title>
+<meta name="description" content="Market-make Apple on real Nasdaq order flow with machine-learning quote filters. Every number is a precomputed backtest.">
+<link rel="preload" href="fonts/ArchivoExtraCondensed-Black.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="site.css">
 <style>
-:root {
-  --ink: #0e1a2b; --panel: #142339; --line: #233650; --text: #dde6f1; --muted: #8a9bb4;
-  --bid: #4cb5df; --ask: #efa54b; --good: #5cc79a; --bad: #e86a5a; --grey: #8a9bb4; --lat: #7fd38f; --tox: #c39bea;
-  --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
-  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-  color-scheme: dark;
+/* ---------- the desk: controls | results | scorecard ---------- */
+.desk { display: grid; grid-template-columns: 286px minmax(0, 1fr) 340px; gap: var(--gap); align-items: start; }
+.rail { display: flex; flex-direction: column; gap: 18px; }
+.rail .group { display: flex; flex-direction: column; gap: 7px; }
+.rail .glabel { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.filters { display: flex; flex-direction: column; gap: 4px; }
+.filter {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 11px; align-items: center; text-align: left;
+  border: 1px solid transparent; background: transparent; border-radius: var(--radius); padding: 7px 8px; cursor: pointer;
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
 }
-* { box-sizing: border-box; }
-html, body { margin: 0; background: var(--ink); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.45; }
-body { padding: 20px clamp(16px, 3vw, 40px) 40px; max-width: 1440px; margin: 0 auto; }
-a { color: var(--bid); }
-a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ask); outline-offset: 2px; }
-.top { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
-h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 44px); letter-spacing: 0.01em; line-height: 1; margin: 0; text-wrap: balance; }
-h1 .sym { color: var(--ask); }
-.sub { margin: 6px 0 0; color: var(--muted); max-width: 74ch; }
-.links { display: flex; gap: 18px; font-weight: 500; white-space: nowrap; }
-h2 { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.02em; margin: 0 0 10px; }
-h3 { font-size: 14px; font-weight: 600; margin: 14px 0 6px; color: var(--text); }
-.board { margin-top: 16px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-.cell { background: var(--panel); padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.label { color: var(--muted); font-size: 12.5px; }
-.big { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 3.2vw, 46px); line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.delta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.pos { color: var(--good); } .neg { color: var(--bad); }
-.controls { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; }
-.ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13.5px; flex-wrap: wrap; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
-.seg button { font: inherit; font-size: 13.5px; color: var(--text); background: var(--ink); border: 0; border-right: 1px solid var(--line); padding: 6px 11px; cursor: pointer; }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--ask); color: var(--ink); font-weight: 600; }
-.seg button:disabled { opacity: 0.35; cursor: not-allowed; }
-.chip { font: inherit; font-size: 12.5px; color: var(--ask); background: transparent; border: 1px solid var(--ask); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
-.chip:disabled { opacity: 0.35; cursor: default; }
-input[type=range] { accent-color: var(--ask); width: 150px; }
-input[type=range]:disabled { opacity: 0.35; }
-#pullv { min-width: 3.4em; color: var(--text); font-variant-numeric: tabular-nums; }
-.grid2 { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
-.grid2.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.grid3 { margin-top: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.box { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
-.plot { position: relative; height: 280px; }
-.plot.short { height: 240px; }
-.plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
-.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
-.note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
-.tbl { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-th, td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th:first-child, td:first-child { text-align: left; }
-th { color: var(--muted); font-weight: 500; }
-td small { display: block; color: var(--muted); font-size: 11.5px; }
-td.wrap, th.wrap { white-space: normal; }
-tr.cur td { background: rgba(239, 165, 75, 0.10); }
-.prose p { margin: 0 0 8px; } .prose li { margin-bottom: 4px; } .prose { font-size: 14px; }
-.empty { color: var(--muted); font-size: 13px; font-style: italic; }
-#err { display: none; margin-top: 20px; padding: 14px 16px; border: 1px solid var(--bad); border-radius: 6px; }
-@media (max-width: 980px) {
-  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid2, .grid2.even, .grid3 { grid-template-columns: minmax(0, 1fr); }
+.filter .badge { grid-row: span 2; }
+.filter .fname { font-weight: 600; font-size: 14px; line-height: 1.2; }
+.filter .fdesc { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.filter:hover { background: #e2e3dc; }
+.filter[aria-checked="true"] { background: var(--card); border-color: var(--ink); }
+.rate { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+.rate input { width: 100%; margin: 0; }
+.rate output { font: 600 20px/1 var(--figures); min-width: 3.2ch; text-align: right; }
+.ticks { grid-column: 1 / -1; position: relative; height: 18px; font-size: 11.5px; color: var(--muted); }
+.ticks span { position: absolute; transform: translateX(-50%); top: 0; }
+.ticks .pickmark { top: 0; color: var(--ink); font-weight: 700; }
+.ticks .pickmark::before { content: ""; position: absolute; left: 50%; top: -9px; width: 2px; height: 7px; background: var(--ink); transform: translateX(-50%); }
+.rail .seg { width: 100%; }
+.rail .seg button { flex: 1; padding: 6px 4px; }
+.rail .hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+.work { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.result { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); }
+.result > div { padding: 12px 14px 13px; border-right: 1px solid var(--rule-soft); min-width: 0; }
+.result > div:last-child { border-right: 0; }
+.result .k { font-size: 12.5px; color: var(--muted); display: block; }
+.result .v { font: 600 clamp(22px, 2.3vw, 30px)/1.1 var(--figures); display: block; margin-top: 3px; white-space: nowrap; letter-spacing: -0.01em; }
+.result .d { font-size: 12.5px; display: block; margin-top: 3px; color: var(--muted); white-space: nowrap; }
+.chartbox { padding: 14px 16px 12px; }
+.chartbox .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.chartbox h2 { margin: 0; }
+.chartbox .sub { color: var(--muted); font-size: 13px; }
+#plot-pnl { height: 330px; margin-top: 8px; }
+.score h2 { margin-bottom: 4px; }
+.score .lede { font-size: 13px; color: var(--ink-2); margin: 0 0 10px; }
+.score table { font-size: 13px; }
+.score tbody tr { cursor: pointer; }
+.score tbody tr:hover td { background: #ebece6; }
+.score .rowname { display: flex; align-items: center; }
+
+/* ---------- evidence ---------- */
+.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+.cols2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--gap); }
+#plot-front { height: 300px; margin-top: 8px; }
+#plot-roc { height: 250px; }
+#plot-imp { height: 250px; }
+.panel h3:first-child { margin-top: 0; }
+.prose { font-size: 14.5px; }
+.prose p, .prose ul { max-width: 72ch; }
+.prose p { margin: 0 0 10px; }
+.prose ul { margin: 0; padding-left: 18px; }
+.prose li { margin-bottom: 6px; }
+#err { display: none; margin: 20px 0; padding: 14px 16px; border: 1px solid var(--worse); border-radius: var(--radius); background: var(--card); }
+
+@media (max-width: 1240px) {
+  .desk { grid-template-columns: 270px minmax(0, 1fr); }
+  .score { grid-column: 1 / -1; }
+}
+@media (max-width: 860px) {
+  .desk { grid-template-columns: minmax(0, 1fr); }
+  .work { order: -1; }
+  .rail { position: static; }
+  .filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .filter .fdesc { display: none; }
+  .result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result > div { border-bottom: 1px solid var(--rule-soft); }
+  .result > div:nth-child(2n) { border-right: 0; }
+  .result > div:last-child { grid-column: 1 / -1; border-bottom: 0; }
+  #plot-pnl { height: 260px; }
+  .cols3, .cols2 { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
 </head>
 <body>
-<header class="top">
-  <div>
-    <h1>Market-making <span class="sym">playground</span></h1>
-    <p class="sub" id="sub">A market maker quoting AAPL on real Nasdaq order flow, with machine-learning filters that pull or step back quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.</p>
-  </div>
-  <nav class="links"><a href="index.html">Order book replay</a><a href="https://github.com/adamdn-code/orderbook">Source on GitHub</a></nav>
+<header class="bar">
+  <a class="mark" href="index.html"><span class="badge paper">Order book</span><span class="who">Adam Nguyen</span></a>
+  <nav aria-label="Site"><ul class="tabs">
+    <li><a href="index.html">Replay</a></li>
+    <li><a href="playground.html" aria-current="page">Playground</a></li>
+    <li><a href="#method">Method</a></li>
+  </ul></nav>
+  <div class="out" id="owner-links"><a href="https://github.com/adamdn-code/orderbook">GitHub</a></div>
 </header>
 
-<div id="err"></div>
+<main class="page">
+  <section class="intro">
+    <div>
+      <h1>Strategy playground</h1>
+      <p>A market maker quoting Apple on real Nasdaq order flow. Pick a filter and its settings to see how the afternoon goes. Every number is a backtest, run ahead of time for every combination.</p>
+    </div>
+    <p class="meta" id="meta"><b>AAPL</b> · 2019-01-30 · 13:30–15:55 ET</p>
+  </section>
 
-<section class="controls" aria-label="Strategy settings">
-  <div class="ctl">Filter
-    <span class="seg" id="filter">
-      <button data-v="none">None</button><button data-v="imbalance">Imbalance</button><button data-v="model" aria-pressed="true">ML: next move</button><button data-v="model_lat">ML: latency-trained</button><button data-v="toxicity">ML: fill toxicity</button>
-    </span>
-  </div>
-  <div class="ctl"><label for="pull">Active</label>
-    <input type="range" id="pull" min="0" max="5" step="1" value="2"><span id="pullv"></span><span>of the time</span>
-    <button class="chip" id="chosen" title="Use the rate picked on the 12:30–13:30 tuning hour, before looking at the test period">★ tuning-hour pick</button>
-  </div>
-  <div class="ctl">Latency <span class="seg" id="latency"></span></div>
-  <div class="ctl">When triggered <span class="seg" id="action">
-      <button data-v="pull" aria-pressed="true">Pull quote</button><button data-v="shift">Step back 1¢</button></span>
-  </div>
-  <div class="ctl">Quote at <span class="seg" id="placement">
-      <button data-v="join" aria-pressed="true">Best price</button><button data-v="behind">1¢ behind</button></span>
-  </div>
-</section>
+  <div id="err" role="alert"></div>
 
-<section class="board" aria-label="Selected strategy, test period" aria-live="polite">
-  <div class="cell"><span class="label">PnL with rebate</span><span class="big" id="b-pnl">–</span><span class="delta" id="d-pnl"></span></div>
-  <div class="cell"><span class="label">Shares traded</span><span class="big" id="b-shares">–</span><span class="delta" id="d-shares"></span></div>
-  <div class="cell"><span class="label">PnL per 100 shares</span><span class="big" id="b-per">–</span><span class="delta" id="d-per"></span></div>
-  <div class="cell"><span class="label">1 s markout (¢/share)</span><span class="big" id="b-mk">–</span><span class="delta" id="d-mk"></span></div>
-  <div class="cell"><span class="label">Max inventory</span><span class="big" id="b-inv">–</span><span class="delta" id="d-inv"></span></div>
-</section>
+  <section class="desk" aria-label="Strategy settings and results">
+    <aside class="rail" aria-label="Settings">
+      <div class="group">
+        <span class="glabel" id="filter-label">Quote filter</span>
+        <div class="filters" id="filters" role="radiogroup" aria-labelledby="filter-label"></div>
+      </div>
+      <div class="group" id="rate-group">
+        <label class="glabel" for="rate">Active this share of the time</label>
+        <div class="rate">
+          <input type="range" id="rate" min="0" max="5" step="1" value="2" aria-describedby="rate-hint">
+          <output id="rate-out" for="rate"></output>
+          <div class="ticks" id="ticks" aria-hidden="true"></div>
+        </div>
+        <p class="hint" id="rate-hint">The marked rate was picked on the 12:30–13:30 tuning hour, before the test afternoon was run.</p>
+        <button class="btn quiet" id="use-pick" type="button">Use the tuning-hour pick</button>
+      </div>
+      <div class="group">
+        <span class="glabel" id="lat-label">Latency</span>
+        <div class="seg" id="latency" role="radiogroup" aria-labelledby="lat-label"></div>
+      </div>
+      <div class="group">
+        <span class="glabel" id="act-label">When the filter fires</span>
+        <div class="seg" id="action" role="radiogroup" aria-labelledby="act-label">
+          <button type="button" role="radio" data-v="pull">Pull the quote</button><button type="button" role="radio" data-v="shift">Step back 1¢</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="glabel" id="place-label">Quote at</span>
+        <div class="seg" id="placement" role="radiogroup" aria-labelledby="place-label">
+          <button type="button" role="radio" data-v="join">Best price</button><button type="button" role="radio" data-v="behind">1¢ behind</button>
+        </div>
+      </div>
+    </aside>
 
-<section class="grid2">
-  <div class="box">
-    <h2>PnL through the afternoon</h2>
-    <div class="plot"><canvas id="c-pnl" role="img" aria-label="PnL over time for the selected strategy and no filter"></canvas></div>
-    <div class="legend" id="lg-pnl"></div>
-  </div>
-  <div class="box">
-    <h2>Edge, not just less trading</h2>
-    <div class="plot"><canvas id="c-front" role="img" aria-label="PnL per 100 shares against shares traded for each filter"></canvas></div>
-    <div class="legend" id="lg-front"></div>
-    <p class="note">Each point is one activity rate (10–60%), stars mark the rate picked on the tuning hour. Every filter trades less as it pulls more; it only adds edge if its line sits <em>above</em> the others at the same volume.</p>
-  </div>
-</section>
+    <div class="work">
+      <div class="result" aria-live="polite" aria-label="Result for the selected settings, test afternoon">
+        <div><span class="k">PnL with rebate</span><span class="v" id="r-pnl">–</span><span class="d" id="d-pnl"></span></div>
+        <div><span class="k">Shares traded</span><span class="v" id="r-shares">–</span><span class="d" id="d-shares"></span></div>
+        <div><span class="k">PnL per 100 shares</span><span class="v" id="r-per">–</span><span class="d" id="d-per"></span></div>
+        <div><span class="k">1 s markout, ¢/share</span><span class="v" id="r-mk">–</span><span class="d" id="d-mk"></span></div>
+        <div><span class="k">Max inventory</span><span class="v" id="r-inv">–</span><span class="d" id="d-inv"></span></div>
+      </div>
+      <div class="panel chartbox">
+        <div class="head"><h2>The afternoon</h2><span class="sub" id="pnl-sub"></span></div>
+        <div class="plot" id="plot-pnl"><canvas id="c-pnl" role="img" aria-label="Running PnL through the test afternoon for the selected filter and for no filter"></canvas></div>
+      </div>
+      <div class="panel chartbox" id="edge">
+        <div class="head"><h2>Edge, or just less trading?</h2></div>
+        <p class="note" style="margin:6px 0 0">Every filter trades less the more often it fires, and trading less alone cuts the loss. A filter adds edge only if its line sits above the others at the same volume.</p>
+        <div class="plot" id="plot-front"><canvas id="c-front" role="img" aria-label="PnL per 100 shares against shares traded, one line per filter across activity rates"></canvas></div>
+        <p class="note" id="front-note"></p>
+      </div>
+    </div>
 
-<section class="box" style="margin-top:16px">
-  <h2>Honest scorecard: rates picked before seeing the test period</h2>
-  <div class="tbl"><table id="t-head"></table></div>
-  <p class="note" id="head-note"></p>
-</section>
+    <aside class="score panel" aria-labelledby="score-h">
+      <h2 id="score-h">Scorecard</h2>
+      <p class="lede" id="score-lede">Each filter at the rate picked on the tuning hour. Click a row to load it.</p>
+      <div class="tbl"><table id="t-score"></table></div>
+    </aside>
+  </section>
 
-<section class="grid3">
-  <div class="box">
-    <h2>How good is the model?</h2>
-    <div class="plot short"><canvas id="c-roc" role="img" aria-label="ROC curves for the model and the imbalance baseline"></canvas></div>
-    <div class="legend" id="lg-roc"></div>
-  </div>
-  <div class="box">
-    <h2>Test AUC by label</h2>
-    <div class="tbl"><table id="t-auc"></table></div>
-    <p class="note" id="auc-note"></p>
-  </div>
-  <div class="box">
-    <h2>What it looks at</h2>
-    <div class="plot short"><canvas id="c-imp" role="img" aria-label="Permutation importance of the top features"></canvas></div>
-    <p class="note">AUC lost on the test period when each feature is shuffled.</p>
-  </div>
-</section>
+  <section class="section" id="model">
+    <h2>How well the model predicts</h2>
+    <p class="lede">Gradient-boosted trees on 19 order-flow features, scored on the held-out afternoon. 0.5 is a coin flip.</p>
+    <div class="cols3">
+      <div class="panel"><h3>ROC, next mid move</h3><div class="plot" id="plot-roc"><canvas id="c-roc" role="img" aria-label="ROC curves for the next-move model and order-book imbalance"></canvas></div><div class="keyline" id="k-roc"></div></div>
+      <div class="panel"><h3>Test AUC by label</h3><div class="tbl"><table id="t-auc"></table></div><p class="note" id="auc-note"></p></div>
+      <div class="panel"><h3>What it looks at</h3><div class="plot" id="plot-imp"><canvas id="c-imp" role="img" aria-label="Permutation importance of the top eight features"></canvas></div><p class="note">AUC lost on the test afternoon when each feature is shuffled.</p></div>
+    </div>
+  </section>
 
-<section class="grid2 even">
-  <div class="box">
+  <section class="section" id="elsewhere">
     <h2>Away from this afternoon</h2>
-    <h3>Other stocks, same day (test period 13:30–15:55)</h3>
-    <div class="tbl" id="x-stocks"></div>
-    <h3 id="d2-title">A second day nobody tuned on</h3>
-    <div class="tbl" id="x-day2"></div>
-    <h3>Does SPY lead AAPL?</h3>
-    <div id="x-spy"></div>
-  </div>
-  <div class="box">
-    <h2>Training for latency, and for fills</h2>
-    <h3>Latency-aware labels: predict the first move after your cancel can land</h3>
-    <div class="tbl" id="x-lat"></div>
-    <h3>Fill-toxicity model: trained on the market maker's own fills</h3>
-    <div class="tbl" id="x-tox"></div>
-    <h3>In C++, next to the matching engine</h3>
-    <div id="x-cpp"></div>
-  </div>
-</section>
+    <p class="lede">The same models on other stocks, on a second day nobody tuned on, and with SPY added as a leading signal.</p>
+    <div class="cols2">
+      <div class="panel"><h3 id="d2-title">A second day, everything frozen</h3><div class="tbl" id="x-day2"></div></div>
+      <div class="panel">
+        <h3>Other stocks, same day</h3><div class="tbl" id="x-stocks"></div>
+        <h3>Does SPY lead Apple?</h3><div id="x-spy"></div>
+      </div>
+    </div>
+  </section>
 
-<section class="grid2">
-  <div class="box prose">
-    <h2>How this was built</h2>
-    <p><b>Models.</b> Gradient-boosted trees on 19 order-flow features computed only from events up to that moment (depth imbalance at 1, 2 and 5 levels, order-flow imbalance over 100 ms, 1 s and 10 s, signed trade volume, queue sizes, recent moves). <i>Next move</i> predicts the direction of the next mid-price change. <i>Latency-trained</i> predicts the first change after the cancel could land, since nothing can dodge a move inside that gap. <i>Fill toxicity</i> predicts the 1-second markout of a fill on each side, trained directly on the fills the plain market maker got in the morning.</p>
-    <p><b>Honest split.</b> Train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55 (including the 2 pm Fed announcement), 60 s embargo, never shuffled. Thresholds, pull rates and model settings all come from the tuning hour. The test period is used once.</p>
-    <p><b>Backtest.</b> Quotes are shadow orders whose queue position is tracked exactly from Nasdaq's order-level feed, with place/cancel latency and a $0.0020/share rebate. A triggered filter either pulls the threatened quote or steps it back a cent.</p>
-    <p><b>Fair comparison.</b> Each filter's thresholds are set so it is active the same share of the time on the tuning hour. Pulling more always means trading less, so the question is loss <em>per share</em> at equal activity.</p>
-  </div>
-  <div class="box prose">
-    <h2>Limits</h2>
-    <ul>
-      <li>Two days of one stock, the second held out entirely (see "Away from this afternoon"). Better than one, but not a track record.</li>
-      <li>Shadow orders have no market impact, so fill counts are on the high side.</li>
-      <li>The rebate is assumed; auction and hidden-order fills are not modelled.</li>
-      <li>The tuning hour is short, so the pull rate it picks is a noisy choice. That's the honest cost of not peeking.</li>
-    </ul>
-  </div>
-</section>
+  <section class="section" id="training">
+    <h2>Training for latency, fills and speed</h2>
+    <div class="cols3">
+      <div class="panel"><h3>Latency-aware labels</h3><div class="tbl" id="x-lat"></div></div>
+      <div class="panel"><h3>Fill toxicity</h3><div class="tbl" id="x-tox"></div></div>
+      <div class="panel"><h3>In C++, next to the engine</h3><div id="x-cpp"></div></div>
+    </div>
+  </section>
+
+  <section class="section" id="method">
+    <h2>Method</h2>
+    <div class="cols2">
+      <div class="panel prose">
+        <p><b>Models.</b> <span class="badge sm nxt">NXT</span> predicts the direction of the next mid-price change. <span class="badge sm lat">LAT</span> predicts the first change after a cancel could land, since nothing can dodge a move inside that gap. <span class="badge sm tox">TOX</span> predicts the 1-second markout of a fill on each side, trained on the fills the plain market maker got in the morning. <span class="badge sm imb">IMB</span> is the old signal: how hard the best bid and ask lean one way.</p>
+        <p><b>Split.</b> Train 9:35–12:30, tune 12:30–13:30, test 13:30–15:55, with a 60-second gap at each boundary and no shuffling. Thresholds, activity rates and model settings all come from the tuning hour; the test afternoon is run once.</p>
+        <p><b>Backtest.</b> Quotes are shadow orders whose queue position is tracked exactly from Nasdaq's order-level feed, with place and cancel latency and a $0.0020 per share rebate.</p>
+        <p><b>Fair comparison.</b> Each filter's thresholds are set so it fires the same share of the time on the tuning hour, so loss per share is compared at equal activity.</p>
+      </div>
+      <div class="panel prose">
+        <p><b>Limits.</b></p>
+        <ul>
+          <li>Two days of one stock for the backtests, the second held out entirely. Better than one, not a track record.</li>
+          <li>Shadow orders have no market impact, so fill counts run high.</li>
+          <li>The rebate is assumed; auction and hidden-order fills are not modelled.</li>
+          <li>The tuning hour is short, so the rate it picks is a noisy choice. That is the cost of not peeking.</li>
+        </ul>
+        <p class="note">Code, data pipeline and full write-up: <a href="https://github.com/adamdn-code/orderbook/tree/main/backtest">backtest/ on GitHub</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="who">Adam Nguyen</span>
+    <span id="foot-links"><a href="https://github.com/adamdn-code">github.com/adamdn-code</a></span>
+    <span class="src">Data: Nasdaq TotalView-ITCH 5.0 sample files</span>
+  </footer>
+</main>
 
 <script>
 "use strict";
+// Owner links. LinkedIn and resume show up here once they are filled in.
+const OWNER = { github: "https://github.com/adamdn-code", linkedin: "", resume: "" };
+
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const C = { bid: css("--bid"), ask: css("--ask"), grey: css("--grey"), line: css("--line"), muted: css("--muted"), text: css("--text"), lat: css("--lat"), tox: css("--tox") };
-const COLOR = { model: C.bid, imbalance: C.ask, none: C.grey, model_lat: C.lat, toxicity: C.tox };
-const NAME = { model: "ML: next move", imbalance: "Imbalance", none: "No filter", model_lat: "ML: latency-trained", toxicity: "ML: fill toxicity" };
-const FILTERS = ["imbalance", "model", "model_lat", "toxicity"];
+const FILTERS = [
+  { id: "none", code: "OFF", cls: "off", name: "No filter", desc: "Quote all the time" },
+  { id: "imbalance", code: "IMB", cls: "imb", name: "Imbalance", desc: "Pull when the best bid and ask lean hard one way" },
+  { id: "model", code: "NXT", cls: "nxt", name: "ML: next move", desc: "Pull when the model expects the price to run through the quote" },
+  { id: "model_lat", code: "LAT", cls: "lat", name: "ML: latency-trained", desc: "Same, trained on the first move after a cancel can land" },
+  { id: "toxicity", code: "TOX", cls: "tox", name: "ML: fill toxicity", desc: "Pull a side when a fill there is predicted to lose money" },
+];
+const F = Object.fromEntries(FILTERS.map((f) => [f.id, f]));
+const COLOR = () => ({ none: css("--graph"), imbalance: css("--gold"), model: css("--kelly"), model_lat: css("--royal"), toxicity: css("--verm") });
 const state = { filter: "model", pull: 2, latency: 0, placement: "join", action: "pull" };
-let D, index, chosen;
+let D, index, picked;
 
 const money = (v) => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("en-US");
 const per = (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(3);
 const signed = (v, d = 2) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d);
-const lat = (us) => us === 0 ? "0" : us >= 1000 ? `${us / 1000} ms` : `${us} µs`;
-const hhmm = (s) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}`;
+const latName = (us) => us === 0 ? "0" : us >= 1000 ? `${us / 1000} ms` : `${us} µs`;
+const hhmm = (s) => `${Math.floor(s / 3600) > 12 ? Math.floor(s / 3600) - 12 : Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}`;
 const f3 = (v) => v == null ? "–" : v.toFixed(3);
-const ci = (c) => c ? `${signed(c[0], 3)} to ${signed(c[1], 3)}` : "–";
-const gainCi = (g, c) => `<b>${signed(g, 3)}</b><small>${c ? `${signed(c[0], 3)} to ${signed(c[1], 3)}` : ""}</small>`;
+const pct = (r) => `${Math.round(r * 100)}%`;
+const badge = (id, size = "") => `<span class="badge ${size} ${F[id].cls}">${F[id].code}</span>`;
+const gainCi = (g, c) => `<span class="num-strong">${signed(g, 3)}</span><small>${c ? `${signed(c[0], 3)} to ${signed(c[1], 3)}` : ""}</small>`;
 
 // model_lat at zero latency is the same model as `model`
-function effFilter(f, latency) { return f === "model_lat" && latency === 0 ? "model" : f; }
-function key(f, rate, latency, placement, action) { return `${f}|${f === "none" ? 0 : rate}|${latency}|${placement}|${f === "none" ? "pull" : action}`; }
-function get(f, pullIdx, s = state) {
-  const ff = effFilter(f, s.latency);
-  const action = s.placement === "behind" ? "pull" : s.action;
-  return index.get(key(ff, ff === "none" ? 0 : D.meta.pull_rates[pullIdx], s.latency, s.placement, action));
+const eff = (f, lat) => (f === "model_lat" && lat === 0 ? "model" : f);
+const act = (s) => (s.placement === "behind" ? "pull" : s.action);
+const key = (f, rate, lat, place, action) => `${f}|${f === "none" ? 0 : rate}|${lat}|${place}|${f === "none" ? "pull" : action}`;
+function get(f, i, s = state) {
+  const ff = eff(f, s.latency);
+  return index.get(key(ff, ff === "none" ? 0 : D.meta.pull_rates[i], s.latency, s.placement, act(s)));
 }
-function chosenIdx(f, s = state) {
-  const r = chosen.get(`${effFilter(f, s.latency)}|${s.latency}|${s.placement === "behind" ? "pull" : s.action}`);
+function pickIdx(f, s = state) {
+  const r = picked.get(`${eff(f, s.latency)}|${s.latency}|${act(s)}`);
   return r == null ? -1 : D.meta.pull_rates.indexOf(r);
 }
 
-function seg(id, onPick) {
-  $(id).addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b || b.disabled) return;
-    for (const x of $(id).children) x.setAttribute("aria-pressed", x === b ? "true" : "false");
+// ---------- controls ----------
+function radios(container, onPick) {
+  container.addEventListener("click", (e) => {
+    const b = e.target.closest("[role=radio]"); if (!b || b.disabled) return;
     onPick(b.dataset.v); render();
   });
+  container.addEventListener("keydown", (e) => {
+    if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+    const items = [...container.querySelectorAll("[role=radio]:not(:disabled)")];
+    const i = items.indexOf(document.activeElement); if (i < 0) return;
+    e.preventDefault();
+    const next = items[(i + (e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length];
+    next.focus(); next.click();
+  });
 }
-function press(id, v) { for (const x of $(id).children) x.setAttribute("aria-pressed", x.dataset.v === String(v) ? "true" : "false"); }
+function check(container, value) {
+  for (const b of container.querySelectorAll("[role=radio]")) {
+    const on = b.dataset.v === String(value);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+  }
+}
 
 function setup() {
   index = new Map(D.runs.map((r) => [key(r.filter, r.pull_rate, r.latency_us, r.placement, r.action), r]));
-  chosen = new Map((D.meta.selected || []).map((s) => [`${s.filter}|${s.latency_us}|${s.action}`, s.pull_rate]));
-  const lats = D.meta.latencies_us;
-  if (!lats.includes(state.latency)) state.latency = lats[0];
-  $("latency").innerHTML = lats.map((l) => `<button data-v="${l}" aria-pressed="${l === state.latency}">${lat(l)}</button>`).join("");
-  for (const b of $("placement").children) if (!D.meta.placements.includes(b.dataset.v)) b.disabled = true;
-  for (const b of $("action").children) if (!D.meta.actions.includes(b.dataset.v)) b.disabled = true;
-  $("pull").max = D.meta.pull_rates.length - 1;
-  seg("filter", (v) => (state.filter = v));
-  seg("latency", (v) => (state.latency = +v));
-  seg("placement", (v) => { state.placement = v; if (v === "behind") { state.action = "pull"; press("action", "pull"); } });
-  seg("action", (v) => (state.action = v));
-  $("pull").addEventListener("input", (e) => { state.pull = +e.target.value; render(); });
-  $("chosen").addEventListener("click", () => { const i = chosenIdx(state.filter); if (i >= 0) { state.pull = i; $("pull").value = i; render(); } });
-  $("sub").textContent = `A market maker quoting ${D.meta.symbol} on real Nasdaq order flow (${D.meta.date}, ${D.meta.window}), with machine-learning filters that pull or step back quotes before the price moves through them. Every number here is a real backtest, precomputed for each combination of settings.`;
-  // start on the tuning-hour pick
-  const i0 = chosenIdx(state.filter); if (i0 >= 0) { state.pull = i0; $("pull").value = i0; }
+  picked = new Map((D.meta.selected || []).map((s) => [`${s.filter}|${s.latency_us}|${s.action}`, s.pull_rate]));
+  $("meta").innerHTML = `<b>${D.meta.symbol}</b> · ${D.meta.date} · test afternoon, 1:30–3:55 pm ET`;
+  $("filters").innerHTML = FILTERS.map((f) =>
+    `<button type="button" role="radio" class="filter" data-v="${f.id}">${badge(f.id, "lg")}<span class="fname">${f.name}</span><span class="fdesc">${f.desc}</span></button>`).join("");
+  $("latency").innerHTML = D.meta.latencies_us.map((l) => `<button type="button" role="radio" data-v="${l}">${latName(l)}</button>`).join("");
+  $("rate").max = D.meta.pull_rates.length - 1;
+  radios($("filters"), (v) => { state.filter = v; const i = pickIdx(v); if (i >= 0) state.pull = i; });
+  radios($("latency"), (v) => { state.latency = +v; });
+  radios($("action"), (v) => { state.action = v; });
+  radios($("placement"), (v) => { state.placement = v; });
+  $("rate").addEventListener("input", (e) => { state.pull = +e.target.value; render(); });
+  $("use-pick").addEventListener("click", () => { const i = pickIdx(state.filter); if (i >= 0) { state.pull = i; render(); } });
+  const i0 = pickIdx(state.filter); if (i0 >= 0) state.pull = i0;
+  const links = [["GitHub", OWNER.github + "/orderbook"], ["LinkedIn", OWNER.linkedin], ["Resume", OWNER.resume]].filter((l) => l[1]);
+  $("owner-links").innerHTML = links.map(([t, u]) => `<a href="${u}">${t}</a>`).join("");
+  $("foot-links").innerHTML = [["github.com/adamdn-code", OWNER.github], ["LinkedIn", OWNER.linkedin], ["Resume", OWNER.resume]]
+    .filter((l) => l[1]).map(([t, u]) => `<a href="${u}">${t}</a>`).join(" · ");
   modelPanels(); extraPanels(); render();
-  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { render(); modelPanels(); }, 120); });
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { drawCharts(); modelPanels(); }, 120); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { drawCharts(); modelPanels(); });
 }
 
-function setBoard(id, text, delta, better) {
-  $("b-" + id).textContent = text;
+function setResult(id, text, delta, better) {
+  $("r-" + id).textContent = text;
   const d = $("d-" + id); d.textContent = delta ?? "";
-  d.className = "delta" + (better == null ? "" : better ? " pos" : " neg");
+  d.className = "d" + (better == null ? "" : better ? " better" : " worse");
 }
 
 function render() {
   const behind = state.placement === "behind";
-  for (const b of $("action").children) b.disabled = behind || !D.meta.actions.includes(b.dataset.v);
-  const ci0 = chosenIdx(state.filter);
-  $("pullv").textContent = Math.round(D.meta.pull_rates[state.pull] * 100) + "%" + (ci0 === state.pull ? " ★" : "");
-  $("pull").disabled = state.filter === "none";
-  $("chosen").disabled = state.filter === "none" || ci0 < 0;
+  if (behind) state.action = "pull";
+  check($("filters"), state.filter); check($("latency"), state.latency); check($("action"), state.action); check($("placement"), state.placement);
+  for (const b of $("action").querySelectorAll("button")) b.disabled = behind;
+  for (const b of $("filters").querySelectorAll("button")) {
+    const isLat0 = b.dataset.v === "model_lat" && state.latency === 0;
+    b.querySelector(".fdesc").textContent = isLat0 ? "At zero latency this is the next-move model" : F[b.dataset.v].desc;
+  }
+  const off = state.filter === "none";
+  $("rate-group").style.opacity = off ? 0.4 : 1;
+  $("rate").disabled = off; $("use-pick").disabled = off || pickIdx(state.filter) < 0 || pickIdx(state.filter) === state.pull;
+  $("rate").value = state.pull;
+  $("rate-out").textContent = pct(D.meta.pull_rates[state.pull]);
+  const pi = pickIdx(state.filter), n = D.meta.pull_rates.length;
+  $("ticks").innerHTML = D.meta.pull_rates.map((r, i) =>
+    `<span class="${i === pi && !off ? "pickmark" : ""}" style="left:calc(${(i / (n - 1)) * 100}% + ${(0.5 - i / (n - 1)) * 16}px)">${pct(r)}</span>`).join("");
+
   const r = get(state.filter, state.pull), base = get("none", 0);
   if (!r || !base) return;
-  const vs = state.filter === "none" ? null : "vs no filter";
+  const vs = off ? null : "vs no filter";
   const dp = r.pnl_with_rebate - base.pnl_with_rebate;
-  setBoard("pnl", money(r.pnl_with_rebate), vs && `${dp >= 0 ? "+" : "−"}${money(Math.abs(dp))} ${vs}`, vs && dp >= 0);
-  setBoard("shares", r.shares.toLocaleString("en-US"), vs && `${Math.round((r.shares / base.shares - 1) * 100)}% ${vs}`, null);
+  setResult("pnl", money(r.pnl_with_rebate), vs && `${dp >= 0 ? "+" : "−"}${money(Math.abs(dp))} ${vs}`, vs && dp >= 0);
+  setResult("shares", r.shares.toLocaleString("en-US"), vs && `${Math.round((r.shares / base.shares - 1) * 100)}% ${vs}`, null);
   const dper = r.pnl_per_100_shares - base.pnl_per_100_shares;
-  setBoard("per", per(r.pnl_per_100_shares), vs && `${signed(dper, 3)} ${vs}`, vs && dper >= 0);
+  setResult("per", per(r.pnl_per_100_shares), vs && `${signed(dper, 3)} ${vs}`, vs && dper >= 0);
   const dmk = r.markout_1s - base.markout_1s;
-  setBoard("mk", signed(r.markout_1s), vs && `${signed(dmk)} ${vs}`, vs && dmk >= 0);
-  setBoard("inv", r.max_abs_inventory.toLocaleString("en-US"), vs && `${base.max_abs_inventory.toLocaleString("en-US")} with no filter`, null);
-  pnlChart(r, base);
-  frontier(r);
-  headline();
+  setResult("mk", signed(r.markout_1s), vs && `${signed(dmk)} ${vs}`, vs && dmk >= 0);
+  setResult("inv", r.max_abs_inventory.toLocaleString("en-US"), vs && `${base.max_abs_inventory.toLocaleString("en-US")} with no filter`, null);
+  $("pnl-sub").textContent = `Latency ${latName(state.latency)} · quoting at ${behind ? "1¢ behind" : "the best price"}${off ? "" : ` · ${act(state) === "pull" ? "pulling" : "stepping back"} when it fires`}`;
+  scorecard();
+  drawCharts();
 }
 
-// ---------------------------------------------------------------- canvas helpers
+function scorecard() {
+  const base = get("none", 0);
+  let rows = `<thead><tr><th>Filter</th><th>Rate</th><th>PnL</th><th>Per 100 sh</th></tr></thead><tbody>`;
+  for (const f of FILTERS) {
+    if (f.id === "model_lat" && state.latency === 0) continue;
+    const i = f.id === "none" ? 0 : pickIdx(f.id); if (i < 0) continue;
+    const r = f.id === "none" ? base : get(f.id, i); if (!r) continue;
+    const cur = eff(state.filter, state.latency) === f.id && (f.id === "none" || i === state.pull) ? "cur" : "";
+    rows += `<tr class="${cur}" data-f="${f.id}" data-i="${i}" tabindex="0"><td><span class="rowname">${badge(f.id)}</span></td><td>${f.id === "none" ? "–" : pct(D.meta.pull_rates[i])}</td><td class="num-strong">${money(r.pnl_with_rebate)}</td><td>${per(r.pnl_per_100_shares)}</td></tr>`;
+  }
+  $("t-score").innerHTML = rows + "</tbody>";
+  $("score-lede").textContent = `Each filter at the rate picked on the tuning hour, latency ${latName(state.latency)}, ${act(state) === "pull" ? "pulling" : "stepping back"}. Click a row to load it.`;
+  for (const tr of $("t-score").querySelectorAll("tbody tr")) {
+    const go = () => { state.filter = tr.dataset.f; state.pull = +tr.dataset.i || state.pull; render(); };
+    tr.addEventListener("click", go);
+    tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  }
+}
+
+// ---------- canvas helpers ----------
 function canvas(id) {
   const c = $(id), dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
-  c.width = w * dpr; c.height = h * dpr;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
   const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  g.font = `12px ${css("--body")}`;
+  g.font = `12px ${css("--ui")}`;
   return { g, w, h };
-}
-function axes(g, w, h, pad, xr, yr, xt, yt, fmtx, fmty) {
-  const X = (v) => pad.l + (v - xr[0]) / (xr[1] - xr[0]) * (w - pad.l - pad.r);
-  const Y = (v) => h - pad.b - (v - yr[0]) / (yr[1] - yr[0]) * (h - pad.t - pad.b);
-  g.strokeStyle = C.line; g.fillStyle = C.muted; g.lineWidth = 1;
-  for (const v of yt) { g.beginPath(); g.moveTo(pad.l, Y(v)); g.lineTo(w - pad.r, Y(v)); g.stroke(); g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(fmty(v), pad.l - 6, Y(v)); }
-  for (const v of xt) { g.textAlign = "center"; g.textBaseline = "top"; g.fillText(fmtx(v), X(v), h - pad.b + 6); }
-  return { X, Y };
 }
 function ticks(lo, hi, n = 5) {
   const step0 = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(step0 || 1));
@@ -307,158 +396,205 @@ function range(vals, padFrac = 0.08) {
   let lo = Math.min(...vals), hi = Math.max(...vals); if (lo === hi) { lo -= 1; hi += 1; }
   const p = (hi - lo) * padFrac; return [lo - p, hi + p];
 }
+function axes(g, w, h, pad, xr, yr, xt, yt, fx, fy) {
+  const X = (v) => pad.l + (v - xr[0]) / (xr[1] - xr[0]) * (w - pad.l - pad.r);
+  const Y = (v) => h - pad.b - (v - yr[0]) / (yr[1] - yr[0]) * (h - pad.t - pad.b);
+  g.lineWidth = 1; g.fillStyle = css("--muted");
+  for (const v of yt) {
+    g.strokeStyle = css("--rule-soft"); g.beginPath(); g.moveTo(pad.l, Math.round(Y(v)) + 0.5); g.lineTo(w - pad.r, Math.round(Y(v)) + 0.5); g.stroke();
+    g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(fy(v), pad.l - 8, Y(v));
+  }
+  for (const v of xt) { g.textAlign = "center"; g.textBaseline = "top"; g.fillText(fx(v), X(v), h - pad.b + 7); }
+  g.strokeStyle = css("--ink"); g.beginPath(); g.moveTo(pad.l, h - pad.b + 0.5); g.lineTo(w - pad.r, h - pad.b + 0.5); g.stroke();
+  return { X, Y };
+}
 function line(g, xs, ys, X, Y, color, width = 2, dash = []) {
-  g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash); g.beginPath();
+  g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash); g.lineJoin = "round"; g.beginPath();
   xs.forEach((x, i) => (i ? g.lineTo(X(x), Y(ys[i])) : g.moveTo(X(x), Y(ys[i])))); g.stroke(); g.setLineDash([]);
 }
-function star(g, x, y, r, color) {
-  g.fillStyle = color; g.strokeStyle = C.ink || "#0e1a2b"; g.lineWidth = 1; g.beginPath();
-  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + rr * Math.cos(a), y + rr * Math.sin(a)); }
-  g.closePath(); g.fill(); g.stroke();
+// a pit badge drawn on canvas, centred-left at (x, y)
+function drawBadge(g, x, y, f, size = 12) {
+  const color = COLOR()[f];
+  g.font = `900 ${size}px ${css("--badge")}`;
+  const text = F[f].code, tw = g.measureText(text).width + size * 0.12 * text.length;
+  const w = Math.max(tw + size * 0.9, size * 2.8), h = size * 1.55;
+  g.fillStyle = color; g.beginPath(); g.roundRect(x, y - h / 2, w, h, 3); g.fill();
+  g.fillStyle = f === "imbalance" ? css("--ink") : "#fff";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  if ("letterSpacing" in g) g.letterSpacing = `${size * 0.06}px`;
+  g.fillText(text, x + w / 2, y + 0.5);
+  if ("letterSpacing" in g) g.letterSpacing = "0px";
+  return w;
 }
 
-function pnlChart(r, base) {
+// The one authored motion: when a setting changes, the selected strategy's afternoon draws in from 1:30.
+const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
+let reveal = 1, revealStart = 0, revealKey = "";
+function drawCharts() {
+  const k = `${state.filter}|${state.pull}|${state.latency}|${state.placement}|${act(state)}`;
+  if (k !== revealKey && revealKey && !calm.matches) { revealStart = performance.now(); reveal = 0; requestAnimationFrame(step); }
+  revealKey = k;
+  pnlChart(); frontier();
+}
+function step(now) {
+  const x = Math.min(1, (now - revealStart) / 520);
+  reveal = 1 - Math.pow(1 - x, 4);  // quartic ease-out
+  pnlChart();
+  if (x < 1) requestAnimationFrame(step);
+}
+
+function pnlChart() {
+  const r = get(state.filter, state.pull), base = get("none", 0); if (!r || !base) return;
   const { g, w, h } = canvas("c-pnl");
   const t = D.mid.t;
-  const series = [[base, "none", [5, 4], 1.5, "No filter"]];
-  if (state.filter !== "none") series.push([r, state.filter, [], 2.5, `${NAME[state.filter]} (${Math.round(D.meta.pull_rates[state.pull] * 100)}%)`]);
+  const series = [[base, "none"]];
+  if (state.filter !== "none") series.push([r, eff(state.filter, state.latency)]);
   const n = Math.min(t.length, ...series.map((s) => s[0].series.pnl.length));
-  const yr = range(series.flatMap((s) => s[0].series.pnl.slice(0, n)).concat([0])), xr = [t[0], t[n - 1]];
-  const pad = { l: 64, r: 12, t: 10, b: 24 };
-  const hourTicks = []; for (let s = Math.ceil(xr[0] / 1800) * 1800; s <= xr[1]; s += 1800) hourTicks.push(s);
-  const { X, Y } = axes(g, w, h, pad, xr, yr, hourTicks, ticks(yr[0], yr[1]), hhmm, money);
-  g.strokeStyle = C.muted; g.lineWidth = 1; g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
-  const fed = 14 * 3600; if (fed > xr[0] && fed < xr[1]) {
-    g.strokeStyle = C.ask; g.globalAlpha = 0.4; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(X(fed), pad.t); g.lineTo(X(fed), h - pad.b); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
-    g.fillStyle = C.ask; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("Fed 2:00 pm", X(fed) + 4, pad.t);
+  const yr = range(series.flatMap((s) => s[0].series.pnl.slice(0, n)).concat([0]), 0.1), xr = [t[0], t[n - 1]];
+  const pad = { l: 62, r: 64, t: 14, b: 26 };
+  const xt = []; for (let s = Math.ceil(xr[0] / 1800) * 1800; s <= xr[1]; s += 1800) xt.push(s);
+  const { X, Y } = axes(g, w, h, pad, xr, yr, xt, ticks(yr[0], yr[1]), hhmm, money);
+  g.strokeStyle = css("--ink"); g.lineWidth = 1; g.beginPath(); g.moveTo(pad.l, Math.round(Y(0)) + 0.5); g.lineTo(w - pad.r, Math.round(Y(0)) + 0.5); g.stroke();
+  const fed = 14 * 3600;
+  if (fed > xr[0] && fed < xr[1]) {
+    g.strokeStyle = css("--ink-2"); g.setLineDash([2, 3]); g.beginPath(); g.moveTo(Math.round(X(fed)) + 0.5, pad.t); g.lineTo(Math.round(X(fed)) + 0.5, h - pad.b); g.stroke(); g.setLineDash([]);
+    g.fillStyle = css("--ink-2"); g.textAlign = "left"; g.textBaseline = "top"; g.font = `500 12px ${css("--ui")}`;
+    g.fillText("Fed statement, 2:00 pm", X(fed) + 6, pad.t);
   }
-  for (const [run, f, dash, wd] of series) line(g, t.slice(0, n), run.series.pnl.slice(0, n), X, Y, COLOR[f], wd, dash);
-  $("lg-pnl").innerHTML = series.map(([run, f, dash, , label]) => `<span><i style="background:${COLOR[f]}${dash.length ? ";opacity:.7" : ""}"></i>${label}: ${money(run.pnl_with_rebate)}</span>`).join("");
+  for (const [run, f] of series) {
+    const m = f === "none" ? n : Math.max(2, Math.round(n * reveal));
+    line(g, t.slice(0, m), run.series.pnl.slice(0, m), X, Y, COLOR()[f], f === "none" ? 1.6 : 2.6, f === "none" ? [5, 4] : []);
+  }
+  // badges at the line ends, nudged apart when they collide
+  const ends = series.map(([run, f]) => ({ f, y: Y(run.series.pnl[n - 1]) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 22) ends[i].y = ends[i - 1].y + 22;
+  for (const e of ends) drawBadge(g, w - pad.r + 8, e.y, e.f, 12);
 }
 
-function frontier(sel) {
+function frontier() {
   const { g, w, h } = canvas("c-front");
+  const shown = FILTERS.filter((f) => f.id !== "none" && !(f.id === "model_lat" && state.latency === 0)).map((f) => f.id);
   const pts = {};
-  for (const f of FILTERS) pts[f] = D.meta.pull_rates.map((_, i) => [i, get(f, i)]).filter((p) => p[1]);
+  for (const f of shown) pts[f] = D.meta.pull_rates.map((_, i) => [i, get(f, i)]).filter((p) => p[1]);
   const base = get("none", 0);
-  const all = [...FILTERS.flatMap((f) => pts[f].map((p) => p[1])), base];
-  const xr = range(all.map((r) => r.shares / 1000)), yr = range(all.map((r) => r.pnl_per_100_shares).concat([0]));
-  const pad = { l: 56, r: 12, t: 10, b: 36 };
-  const { X, Y } = axes(g, w, h, pad, xr, yr, ticks(xr[0], xr[1], 4), ticks(yr[0], yr[1]), (v) => v + "k", (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(2));
-  g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("shares traded", pad.l + (w - pad.l - pad.r) / 2, h - 12);
-  g.strokeStyle = C.muted; g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
-  const shown = FILTERS.filter((f) => !(f === "model_lat" && state.latency === 0));
+  const all = [...shown.flatMap((f) => pts[f].map((p) => p[1])), base];
+  const xr = range(all.map((r) => r.shares / 1000), 0.06), yr = range(all.map((r) => r.pnl_per_100_shares).concat([0]), 0.1);
+  const pad = { l: 58, r: 62, t: 14, b: 40 };
+  const { X, Y } = axes(g, w, h, pad, xr, yr, ticks(xr[0], xr[1], 5), ticks(yr[0], yr[1]), (v) => `${v}k`, (v) => (v < 0 ? "−$" : "$") + Math.abs(v).toFixed(2));
+  g.fillStyle = css("--muted"); g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = `12px ${css("--ui")}`;
+  g.fillText("shares traded on the test afternoon", pad.l + (w - pad.l - pad.r) / 2, h - 4);
+  g.strokeStyle = css("--ink"); g.lineWidth = 1; g.beginPath(); g.moveTo(pad.l, Math.round(Y(0)) + 0.5); g.lineTo(w - pad.r, Math.round(Y(0)) + 0.5); g.stroke();
+  const cur = eff(state.filter, state.latency);
+  const ends = [];
   for (const f of shown) {
     const p = pts[f].map((q) => q[1]); if (!p.length) continue;
-    const width = f === effFilter(state.filter, state.latency) ? 2.6 : 1.4;
-    line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR[f], width);
-    const ci0 = chosenIdx(f);
+    line(g, p.map((r) => r.shares / 1000), p.map((r) => r.pnl_per_100_shares), X, Y, COLOR()[f], f === cur ? 3 : 1.6);
+    const pi = pickIdx(f);
     for (const [i, r] of pts[f]) {
-      if (i === ci0) star(g, X(r.shares / 1000), Y(r.pnl_per_100_shares), 7, COLOR[f]);
-      else { g.fillStyle = COLOR[f]; g.beginPath(); g.arc(X(r.shares / 1000), Y(r.pnl_per_100_shares), 3.2, 0, 7); g.fill(); }
+      const x = X(r.shares / 1000), y = Y(r.pnl_per_100_shares);
+      g.fillStyle = COLOR()[f]; g.beginPath(); g.arc(x, y, i === pi ? 6 : 3.4, 0, 7); g.fill();
+      if (i === pi) { g.strokeStyle = css("--ink"); g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 8.5, 0, 7); g.stroke(); }
     }
+    const last = p.reduce((a, b) => (a.shares > b.shares ? a : b));
+    ends.push({ f, y: Y(last.pnl_per_100_shares), x: X(last.shares / 1000) });
   }
-  g.fillStyle = C.grey; g.beginPath(); g.arc(X(base.shares / 1000), Y(base.pnl_per_100_shares), 5, 0, 7); g.fill();
-  g.strokeStyle = C.text; g.lineWidth = 2; g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 9, 0, 7); g.stroke();
-  $("lg-front").innerHTML = shown.map((f) => `<span><i style="background:${COLOR[f]}"></i>${NAME[f]}</span>`).join("") + `<span><i style="background:${C.grey}"></i>No filter</span>`;
-}
-
-function headline() {
-  const base = get("none", 0);
-  const actionName = state.placement === "behind" ? "pull" : state.action;
-  let rows = `<tr><th>Filter</th><th>Picked rate</th><th>PnL with rebate</th><th>Shares</th><th>Per 100 shares</th><th>1 s markout</th></tr>`;
-  rows += `<tr class="${state.filter === "none" ? "cur" : ""}"><td>No filter</td><td>–</td><td>${money(base.pnl_with_rebate)}</td><td>${base.shares.toLocaleString("en-US")}</td><td>${per(base.pnl_per_100_shares)}</td><td>${signed(base.markout_1s)}¢</td></tr>`;
-  for (const f of FILTERS) {
-    if (f === "model_lat" && state.latency === 0) continue;
-    const i = chosenIdx(f); if (i < 0) continue;
-    const r = get(f, i); if (!r) continue;
-    const cur = effFilter(state.filter, state.latency) === f ? "cur" : "";
-    rows += `<tr class="${cur}"><td>${NAME[f]}</td><td>${Math.round(D.meta.pull_rates[i] * 100)}%</td><td>${money(r.pnl_with_rebate)}</td><td>${r.shares.toLocaleString("en-US")}</td><td>${per(r.pnl_per_100_shares)}</td><td>${signed(r.markout_1s)}¢</td></tr>`;
+  // label each line just past its last point; nudge apart labels that would overlap
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) {
+    const prev = ends[i - 1];
+    if (Math.abs(ends[i].x - prev.x) < 46 && ends[i].y - prev.y < 22) ends[i].y = prev.y + 22;
   }
-  $("t-head").innerHTML = rows;
-  $("head-note").textContent = `Latency ${lat(state.latency)}, quoting at ${state.placement === "join" ? "the best price" : "1¢ behind"}, ${actionName === "pull" ? "pulling" : "stepping back"} threatened quotes. Each filter's rate was picked as the most profitable on the 12:30–13:30 tuning hour, using models fit on the morning only; this table is the test period at that rate.` + (state.placement === "behind" ? " Rates were picked for quoting at the best price; the same rates are shown here." : "");
+  for (const e of ends) drawBadge(g, Math.min(e.x + 10, w - 44), e.y, e.f, 12);
+  g.fillStyle = css("--graph"); g.beginPath(); g.arc(X(base.shares / 1000), Y(base.pnl_per_100_shares), 5, 0, 7); g.fill();
+  drawBadge(g, X(base.shares / 1000) - 44, Y(base.pnl_per_100_shares) - 18, "none", 11);
+  const sel = get(state.filter, state.pull);
+  if (sel) { g.strokeStyle = css("--ink"); g.lineWidth = 2; g.setLineDash([3, 3]); g.beginPath(); g.arc(X(sel.shares / 1000), Y(sel.pnl_per_100_shares), 12, 0, 7); g.stroke(); g.setLineDash([]); }
+  $("front-note").textContent = `Latency ${latName(state.latency)}, quoting at ${state.placement === "join" ? "the best price" : "1¢ behind"}, ${act(state) === "pull" ? "pulling" : "stepping back"}. Ringed dots are the tuning-hour picks; the dashed ring is your current setting.`;
 }
 
 function modelPanels() {
   const m = D.model, nm = m.labels.next_move;
-  const { g, w, h } = canvas("c-roc");
-  const pad = { l: 40, r: 10, t: 8, b: 40 };
-  const { X, Y } = axes(g, w, h, pad, [0, 1], [0, 1], [0, 0.5, 1], [0, 0.5, 1], (v) => v, (v) => v);
-  line(g, [0, 1], [0, 1], X, Y, C.muted, 1, [4, 4]);
-  line(g, m.roc.imbalance.fpr, m.roc.imbalance.tpr, X, Y, C.ask, 2);
-  line(g, m.roc.gbm.fpr, m.roc.gbm.tpr, X, Y, C.bid, 2.5);
-  g.fillStyle = C.muted; g.textAlign = "center"; g.fillText("false positive rate", pad.l + (w - pad.l - pad.r) / 2, h - 12);
-  $("lg-roc").innerHTML = `<span><i style="background:${C.bid}"></i>Next-move model, AUC ${nm.auc.gbm.toFixed(3)}</span><span><i style="background:${C.ask}"></i>Imbalance, AUC ${nm.auc.imbalance.toFixed(3)}</span>`;
-  const names = { next_move: "Next move", up_100ms: "Up in 100 ms", up_1s: "Up in 1 s" };
-  let rows = `<tr><th>Label</th><th>Imbalance</th><th>Logistic</th><th>Trees</th><th>Gain, 95% CI</th></tr>`;
-  for (const [k, v] of Object.entries(m.labels)) {
-    rows += `<tr><td>${names[k] || k}</td><td>${f3(v.auc.imbalance)}</td><td>${f3(v.auc.logistic)}</td><td><b>${f3(v.auc.gbm)}</b></td><td>${gainCi(v.auc.gbm - v.auc.imbalance, v.ci95.gbm_minus_imbalance)}</td></tr>`;
+  {
+    const { g, w, h } = canvas("c-roc");
+    const pad = { l: 34, r: 8, t: 8, b: 36 };
+    const { X, Y } = axes(g, w, h, pad, [0, 1], [0, 1], [0, 0.5, 1], [0, 0.5, 1], (v) => v, (v) => v);
+    line(g, [0, 1], [0, 1], X, Y, css("--rule"), 1, [4, 4]);
+    line(g, m.roc.imbalance.fpr, m.roc.imbalance.tpr, X, Y, css("--gold"), 2.2);
+    line(g, m.roc.gbm.fpr, m.roc.gbm.tpr, X, Y, css("--kelly"), 2.6);
+    g.fillStyle = css("--muted"); g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = `12px ${css("--ui")}`;
+    g.fillText("false positive rate", pad.l + (w - pad.l - pad.r) / 2, h - 4);
+    $("k-roc").innerHTML = `<span>${badge("model", "sm")} AUC ${nm.auc.gbm.toFixed(3)}</span><span>${badge("imbalance", "sm")} AUC ${nm.auc.imbalance.toFixed(3)}</span>`;
   }
-  $("t-auc").innerHTML = rows;
-  $("auc-note").textContent = `Test period ${m.split.test}: ${nm.test_samples.toLocaleString("en-US")} samples for the next-move label. 0.5 is a coin flip. Intervals: block bootstrap over 1-minute blocks.`;
-  const c2 = canvas("c-imp"), imp = m.importance.slice(0, 8);
-  const max = Math.max(...imp.map((r) => r.auc_drop), 1e-6), left = 118, bh = (c2.h - 10) / imp.length;
-  imp.forEach((r, i) => {
-    const y = 4 + i * bh, wbar = Math.max(1, (c2.w - left - 54) * Math.max(0, r.auc_drop) / max);
-    c2.g.fillStyle = C.muted; c2.g.textAlign = "right"; c2.g.textBaseline = "middle"; c2.g.fillText(r.feature, left - 8, y + bh / 2);
-    c2.g.fillStyle = C.bid; c2.g.fillRect(left, y + bh * 0.2, wbar, bh * 0.6);
-    c2.g.fillStyle = C.text; c2.g.textAlign = "left"; c2.g.fillText(r.auc_drop.toFixed(4), left + wbar + 6, y + bh / 2);
-  });
+  const names = { next_move: "Next move", up_100ms: "Up in 100 ms", up_1s: "Up in 1 s" };
+  let rows = `<thead><tr><th>Label</th><th>${badge("imbalance", "sm")}</th><th>Logistic</th><th>${badge("model", "sm")}</th><th>Gain, 95% CI</th></tr></thead><tbody>`;
+  for (const [k, v] of Object.entries(m.labels)) {
+    rows += `<tr><td>${names[k] || k}</td><td>${f3(v.auc.imbalance)}</td><td>${f3(v.auc.logistic)}</td><td class="num-strong">${f3(v.auc.gbm)}</td><td>${gainCi(v.auc.gbm - v.auc.imbalance, v.ci95.gbm_minus_imbalance)}</td></tr>`;
+  }
+  $("t-auc").innerHTML = rows + "</tbody>";
+  $("auc-note").textContent = `${nm.test_samples.toLocaleString("en-US")} test samples for the next-move label. Intervals from a block bootstrap over 1-minute blocks.`;
+  {
+    const c = canvas("c-imp"), imp = m.importance.slice(0, 8);
+    const max = Math.max(...imp.map((r) => r.auc_drop), 1e-6), left = 112, bh = (c.h - 4) / imp.length;
+    imp.forEach((r, i) => {
+      const y = 2 + i * bh, wbar = Math.max(1, (c.w - left - 50) * Math.max(0, r.auc_drop) / max);
+      c.g.font = `12px ${css("--ui")}`; c.g.fillStyle = css("--ink-2"); c.g.textAlign = "right"; c.g.textBaseline = "middle";
+      c.g.fillText(r.feature, left - 8, y + bh / 2);
+      c.g.fillStyle = css("--kelly"); c.g.fillRect(left, y + bh * 0.22, wbar, bh * 0.56);
+      c.g.fillStyle = css("--ink"); c.g.textAlign = "left"; c.g.fillText(r.auc_drop.toFixed(4), left + wbar + 6, y + bh / 2);
+    });
+  }
 }
 
-function table(head, rows) { return `<table><tr>${head.map((x) => `<th>${x}</th>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("")}</table>`; }
-const none = (what) => `<p class="empty">${what} hasn't been run yet.</p>`;
+function table(head, rows) {
+  return `<table><thead><tr>${head.map((x) => `<th>${x}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+const none = (what) => `<p class="empty">${what} has not been run yet.</p>`;
 
 function extraPanels() {
   const x = D.extra || {}, m = D.model;
-  // other stocks
-  const cs = x.cross_stock;
-  $("x-stocks").innerHTML = cs ? table(["Stock", "Spread", "Imbalance", "AAPL model", "Own model", "Own − imb., 95% CI"],
-    Object.entries(cs).map(([s, v]) => [s, `${v.mean_spread_cents.toFixed(1)}¢`, f3(v.auc.imbalance), f3(v.auc.aapl_model), `<b>${f3(v.auc.own_model)}</b>`, gainCi(v.auc.own_model - v.auc.imbalance, v.ci95.own_model_minus_imbalance)]))
-    + `<p class="note">AUC for the next mid move. "AAPL model" is applied unchanged; "own model" is trained on that stock with the same protocol.</p>` : none("The other-stocks study");
-  // second day
   const d2 = x.second_day;
   if (d2) {
-    $("d2-title").textContent = `A second day nobody tuned on (${d2.date === "d2" ? "2019-12-30" : d2.date}, all of 9:35–15:55)`;
+    $("d2-title").textContent = "A second day, everything frozen (2019-12-30)";
     const labs = { next_move: "Next move", next_move_100us: "After 100 µs", next_move_1ms: "After 1 ms", next_move_10ms: "After 10 ms" };
-    let html = table(["Label", "Imbalance", "Day-1 model", "Diff (95% CI)"], Object.entries(d2.auc).map(([k, v]) => [labs[k] || k, f3(v.auc.imbalance), `<b>${f3(v.auc.model)}</b>`, gainCi(v.auc.model - v.auc.imbalance, v.ci95.model_minus_imbalance)]));
-    const byLat = {};
-    for (const r of d2.backtest) (byLat[r.latency_us] ||= []).push(r);
-    const rows = [];
-    for (const [l, rs] of Object.entries(byLat)) for (const r of rs) if (r.action === "pull") rows.push([lat(+l), NAME[r.filter] + (r.filter === "none" ? "" : ` (${Math.round(r.pull_rate * 100)}%)`), money(r.pnl_with_rebate), r.shares.toLocaleString("en-US"), per(r.pnl_per_100_shares), signed(r.markout_1s) + "¢"]);
-    html += `<p class="note">Backtest on day 2 with every setting frozen from day 1 (join best, pull):</p>` + table(["Latency", "Filter", "PnL", "Shares", "Per 100 sh", "1 s markout"], rows);
+    let html = table(["Label", badge("imbalance", "sm"), "Day-1 model", "Gain, 95% CI"],
+      Object.entries(d2.auc).map(([k, v]) => [labs[k] || k, f3(v.auc.imbalance), `<span class="num-strong">${f3(v.auc.model)}</span>`, gainCi(v.auc.model - v.auc.imbalance, v.ci95.model_minus_imbalance)]));
+    const lats = [...new Set(d2.backtest.map((r) => r.latency_us))].sort((a, b) => a - b);
+    const order = ["none", "imbalance", "model", "model_lat", "toxicity"];
+    const best = (l, f) => d2.backtest.filter((r) => r.latency_us === l && r.filter === f).sort((a, b) => b.pnl_with_rebate - a.pnl_with_rebate)[0];
+    const head = ["Latency", ...order.map((f) => badge(f, "sm"))];
+    const rows = lats.map((l) => {
+      const vals = order.map((f) => best(l, f));
+      const top = Math.max(...vals.filter(Boolean).map((v) => v.pnl_with_rebate));
+      return [latName(l), ...vals.map((v) => v ? `<span class="${v.pnl_with_rebate === top ? "num-strong" : ""}">${money(v.pnl_with_rebate)}</span>` : "–")];
+    });
+    html += `<p class="note">PnL for the whole day with every setting frozen from day 1, each filter at its better action. Bold is the least loss at that latency.</p>` + table(head, rows);
     $("x-day2").innerHTML = html;
   } else $("x-day2").innerHTML = none("The second-day test");
-  // SPY
+  const cs = x.cross_stock;
+  $("x-stocks").innerHTML = cs ? table(["Stock", "Spread", badge("imbalance", "sm"), "AAPL model", "Own model", "Own − imb."],
+    Object.entries(cs).map(([s, v]) => [s, `${v.mean_spread_cents.toFixed(1)}¢`, f3(v.auc.imbalance), f3(v.auc.aapl_model), `<span class="num-strong">${f3(v.auc.own_model)}</span>`, gainCi(v.auc.own_model - v.auc.imbalance, v.ci95.own_model_minus_imbalance)]))
+    + `<p class="note">AUC for the next move. A model trained on each stock beats imbalance on all five; the AAPL model applied unchanged does not carry over to the one-tick stocks.</p>` : none("The other-stocks study");
   const sp = x.spy_features;
-  if (sp) {
-    const L = sp.labels.next_move;
-    const spyImp = (sp.importance || []).filter((r) => r.feature.startsWith("spy_")).slice(0, 3).map((r) => `${r.feature} (${r.auc_drop.toFixed(4)})`).join(", ");
-    $("x-spy").innerHTML = table(["Label", "AAPL features only", "+ SPY features", "Gain (95% CI)"], Object.entries(sp.labels).map(([k, v]) => [k === "next_move" ? "Next move" : "Up in 100 ms", f3(v.auc.aapl_only), `<b>${f3(v.auc.with_spy)}</b>`, gainCi(v.auc.with_spy - v.auc.aapl_only, v.ci95.with_spy_minus_aapl_only)]))
-      + `<p class="note">Same split and tuning; nine SPY features as of each AAPL snapshot. Most useful SPY features: ${spyImp || "–"}.</p>`;
-  } else $("x-spy").innerHTML = none("The SPY study");
-  // latency labels
+  $("x-spy").innerHTML = sp ? table(["Label", "Apple only", "+ SPY", "Gain, 95% CI"], Object.entries(sp.labels).map(([k, v]) => [k === "next_move" ? "Next move" : "Up in 100 ms", f3(v.auc.aapl_only), f3(v.auc.with_spy), gainCi(v.auc.with_spy - v.auc.aapl_only, v.ci95.with_spy_minus_aapl_only)]))
+    + `<p class="note">No gain: at these horizons Apple's own book already holds what SPY knows.</p>` : none("The SPY study");
   const ll = m.latency_labels;
-  const latName = (k) => ({ next_move_100us: "100 µs", next_move_1ms: "1 ms", next_move_10ms: "10 ms" })[k] || k;
-  $("x-lat").innerHTML = ll ? table(["Latency", "Imbalance", "Next-move model", "Latency-trained", "Gain"],
-    Object.entries(ll).map(([k, v]) => [latName(k), f3(v.auc.imbalance), f3(v.auc.gbm_next_move), `<b>${f3(v.auc.gbm)}</b>`, signed(v.auc.gbm - v.auc.gbm_next_move, 3)]))
-    + `<p class="note">Test AUC for "which way is the first move after the cancel lands?" The latency-trained model drives the "latency-trained" filter.</p>` : none("Latency-aware training");
-  // toxicity
+  const ln = (k) => ({ next_move_100us: "100 µs", next_move_1ms: "1 ms", next_move_10ms: "10 ms" })[k] || k;
+  $("x-lat").innerHTML = ll ? table(["Latency", badge("imbalance", "sm"), badge("model", "sm"), badge("model_lat", "sm"), "Gain"],
+    Object.entries(ll).map(([k, v]) => [ln(k), f3(v.auc.imbalance), f3(v.auc.gbm_next_move), `<span class="num-strong">${f3(v.auc.gbm)}</span>`, signed(v.auc.gbm - v.auc.gbm_next_move, 3)]))
+    + `<p class="note">Test AUC for the first move after the cancel lands. The gain at 1 and 10 ms did not hold on the second day.</p>` : none("Latency-aware training");
   const tx = m.toxicity;
-  $("x-tox").innerHTML = tx ? table(["Latency", "Train fills", "AUC, losing fill", "Imbalance", "Markout ¢ by predicted fifth, worst → best"],
-    Object.entries(tx).map(([l, v]) => [lat(+l), v.train_fills.toLocaleString("en-US"), `<b>${f3(v.test_auc_bad_fill)}</b>`, f3(v.test_auc_bad_fill_imbalance), v.test_markout_by_quintile.map((q) => signed(q, 2)).join(" ")]))
-    + `<p class="note">Scored on the plain market maker's test-period fills: how well it ranks fills that lose money over the next second.</p>` : none("The toxicity model");
-  // C++
+  $("x-tox").innerHTML = tx ? table(["Latency", "Train fills", badge("toxicity", "sm"), badge("imbalance", "sm")],
+    Object.entries(tx).map(([l, v]) => [latName(+l), v.train_fills.toLocaleString("en-US"), `<span class="num-strong">${f3(v.test_auc_bad_fill)}</span>`, f3(v.test_auc_bad_fill_imbalance)]))
+    + `<p class="note">AUC for spotting fills that lose money over the next second, on the test afternoon's fills. On the second day this filter lost least at every latency.</p>` : none("The toxicity model");
   const cp = x.cpp_inference, tr = x.cpp_tradeoff;
-  let html = cp ? `<p class="prose" style="margin:0">All 19 features and the trees run in C++ on the same book. Over ${cp.decisions.toLocaleString("en-US")} decisions in a full-day replay the C++ features are <b>bit-identical</b> to Python's and the probabilities match exactly. Updating the features costs <b>${Math.round(cp.features_ns_per_decision)} ns</b> per decision; the tuned model (${cp.trees} trees, depth up to ${cp.max_depth}) costs ${(cp.predict_loop_ns / 1000).toFixed(1)} µs to score.</p>` : none("The C++ port");
-  if (tr) html += `<p class="note">Smaller models, same split, timed in C++ (predict-only loop over the day's decisions):</p>` + table(["Model", "Test AUC", "ns / prediction", "p99 single call"],
-    tr.rows.map((r) => [r.label, r.auc >= tr.rows[0].auc - 0.0015 ? `<b>${f3(r.auc)}</b>` : f3(r.auc), Math.round(r.predict_ns).toLocaleString("en-US"), Math.round(r.p99_ns).toLocaleString("en-US")]).concat([["Imbalance alone", f3(tr.imbalance_auc), "–", "–"]]));
+  let html = cp ? `<p class="prose" style="font-size:14px;margin:0 0 8px">Features and trees run in C++ on the same book, <b>bit-identical</b> to Python over ${Math.round(cp.decisions).toLocaleString("en-US")} decisions. Features cost ${Math.round(cp.features_ns_per_decision)} ns per decision.</p>` : none("The C++ port");
+  if (tr) html += table(["Model", "AUC", "ns / call"], tr.rows.map((r) => [r.label.replace(", depth", " × depth"), r.label.startsWith("50 ") ? `<span class="num-strong">${f3(r.auc)}</span>` : f3(r.auc), Math.round(r.predict_ns).toLocaleString("en-US")]).concat([[badge("imbalance", "sm"), f3(tr.imbalance_auc), "–"]]));
   $("x-cpp").innerHTML = html;
 }
 
-fetch("playground_data.json").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+fetch("playground_data.json").then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
   .then((d) => { D = d; setup(); })
-  .catch((e) => { $("err").style.display = "block"; $("err").textContent = "Couldn't load playground_data.json (" + e.message + "). Run backtest/ml_signal.py and backtest/ml_backtest.py to generate it."; console.error(e); });
+  .catch((e) => { const el = $("err"); el.style.display = "block"; el.textContent = `The backtest results did not load (${e.message}). Reload the page; if it keeps failing, the data file is missing from this deployment.`; console.error(e); });
 </script>
 </body>
 </html>
