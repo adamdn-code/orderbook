@@ -56,6 +56,7 @@ python -m unittest -v        # all tests
 - **Latency:** a latency-aware version (predict the first move after your cancel can land) helps when you're slow.
 - **Fills:** a second model trained on the market maker's own fills ranks toxic fills.
 - **Backtest:** as quote filters with matched activity, the ML filters lose less per share than imbalance in 126 of 132 settings. With activity rates picked on a tuning hour before touching the test afternoon, the best ML filter cuts the loss by 60–76% against quoting blindly, though nothing turns profitable.
+- **A second, untouched day:** on 2019-12-30, with everything frozen from day 1, the model still gets AUC 0.648 vs 0.605. The fill-toxicity filter cuts the day's loss by 40–72% against quoting blindly and beats every other filter at every latency.
 - **SPY:** SPY lead-lag features added nothing.
 - **C++:** features and trees run in C++ with bit-identical output to Python. A 50-tree model keeps nearly all of the AUC (0.650 vs 0.652) at **405 ns per prediction**.
 

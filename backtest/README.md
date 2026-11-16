@@ -209,7 +209,30 @@ Pulling more always means trading less, which earlier looked like an improvement
 - The fitted AAPL model does not transfer. It's *worse* than imbalance on the one-tick stocks (MSFT, INTC, SPY), where queue sizes behave very differently, and better only on the wider-spread names.
 - Order-flow models are per-instrument, or at least per tick regime.
 
-**A second day** (2019-12-30, with every model, threshold and rate frozen from 2019-01-30): `ml_generalize.py day2` is ready but hasn't been run yet; the results will be added here.
+**A second day nobody tuned on** (2019-12-30, all of 9:35–15:55, AAPL now ~$290 vs ~$163). Every model, threshold, activity rate and toxicity model is frozen from 2019-01-30; nothing is refit.
+
+| Label | Imbalance | Day-1 model | Gain, 95% CI |
+|---|---|---|---|
+| Next mid move (1.37M snapshots) | 0.605 | **0.648** | +0.042 (+0.039 to +0.046) |
+| First move after 100 µs | 0.593 | **0.625** | +0.032 (+0.028 to +0.036) |
+| After 1 ms | 0.572 | 0.574 | +0.002 (−0.002 to +0.006) |
+| After 10 ms | 0.563 | 0.561 | −0.002 (−0.006 to +0.003) |
+
+The short-horizon prediction holds up almost exactly on a new day and a very different price level. The 1 ms and 10 ms latency-trained models don't: their day-1 gain was real for that day but doesn't generalise.
+
+In dollars, PnL with rebate for the whole day (each filter shows the better of pull and step back, both at their day-1 rates):
+
+| Latency | No filter | Imbalance | Next move | Latency-trained | **Fill toxicity** |
+|---|---|---|---|---|---|
+| 0 | −$3,037 | −$2,170 | −$2,138 | – | **−$879** |
+| 100 µs | −$4,016 | −$3,090 | −$3,514 | −$2,460 | **−$1,130** |
+| 1 ms | −$8,378 | −$6,531 | −$5,901 | −$5,020 | **−$4,774** |
+| 10 ms | −$11,029 | −$8,882 | −$8,074 | −$6,793 | **−$6,644** |
+
+- The fill-toxicity model is the filter that generalises. It loses less than every other filter at every latency, cutting the loss 71–72% against no filter at 0–100 µs and 40–43% at 1–10 ms. It also loses less per share than imbalance at 0–1 ms; at 10 ms it mostly just trades less.
+- The next-move model's AUC carries over, but its trading value mostly doesn't beyond zero latency. At 100 µs it does worse than imbalance.
+- The difference makes sense. The toxicity model was trained on the thing that costs money (what a fill is worth a second later), at the latency it would run at. The direction model is only a proxy for that.
+
 
 **SPY as a leading signal:** adding nine SPY features to AAPL's model (SPY returns, order flow and depth imbalance as of each AAPL snapshot, plus how far SPY has moved since AAPL last moved) did **not** help: 0.651 vs 0.652 for the next move (difference −0.004 to +0.002), and 0.679 vs 0.683 at 100 ms. The most useful SPY feature was the catch-up one, but its importance was a sixth of AAPL's own top features. At these horizons AAPL's own book already holds what SPY knows.
 
@@ -233,7 +256,7 @@ Pulling more always means trading less, which earlier looked like an improvement
 ![Accuracy vs nanoseconds](results/ml/cpp_tradeoff.png)
 
 ### Limitations
-- The backtests are one stock's afternoon. The second day and the other stocks test predictions more broadly.
+- Two days of one stock for the backtests, one held out entirely. That's better than one, but still not a track record.
 - The tuning hour is short, so the activity rate it picks is noisy. That's the cost of not peeking.
 - The toxicity model has only a few thousand training fills.
 - Shadow orders have no market impact, the rebate is assumed, and auction and hidden fills aren't modelled.
