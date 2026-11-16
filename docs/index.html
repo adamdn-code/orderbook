@@ -66,11 +66,11 @@
 .ladder .best .px::after { content: ""; position: absolute; inset: 3px 8px; border: 1.5px solid currentColor; border-radius: 3px; }
 .ladder .qty.l { justify-content: flex-end; padding-right: 8px; }
 .ladder .qty.r { padding-left: 8px; }
-.ladder .bar { position: absolute; top: 4px; bottom: 4px; border-radius: 2px; transition: width 160ms var(--ease-out); }
-.ladder .bid .bar { right: 0; background: rgba(29, 77, 191, 0.18); }
-.ladder .ask .bar { left: 0; background: rgba(200, 54, 26, 0.16); }
-.ladder .best.bid .bar { background: rgba(29, 77, 191, 0.32); }
-.ladder .best.ask .bar { background: rgba(200, 54, 26, 0.28); }
+.ladder .depth { position: absolute; top: 4px; bottom: 4px; border-radius: 1px; transition: width 160ms var(--ease-out); }
+.ladder .bid .depth { right: 0; background: color-mix(in srgb, var(--bid) 14%, transparent); }
+.ladder .ask .depth { left: 0; background: color-mix(in srgb, var(--ask) 14%, transparent); }
+.ladder .best.bid .depth { background: color-mix(in srgb, var(--bid) 26%, transparent); }
+.ladder .best.ask .depth { background: color-mix(in srgb, var(--ask) 26%, transparent); }
 .ladder .qtext { position: relative; }
 .ladder .qty.l .qtext { padding-right: 4px; } .ladder .qty.r .qtext { padding-left: 4px; }
 .ladder .spreadrow { height: 26px; }
@@ -301,11 +301,11 @@ const ladderRows = [];
   const make = (side, level) => {
     const row = document.createElement("div"); row.className = `row ${side}${level === 1 ? " best" : ""}`;
     row.innerHTML = side === "ask"
-      ? '<div class="qty l"></div><div class="px"></div><div class="qty r"><span class="bar"></span><span class="qtext"></span></div>'
-      : '<div class="qty l"><span class="bar"></span><span class="qtext"></span></div><div class="px"></div><div class="qty r"></div>';
+      ? '<div class="qty l"></div><div class="px"></div><div class="qty r"><span class="depth"></span><span class="qtext"></span></div>'
+      : '<div class="qty l"><span class="depth"></span><span class="qtext"></span></div><div class="px"></div><div class="qty r"></div>';
     el.ladder.appendChild(row);
     const qcell = side === "ask" ? row.children[2] : row.children[0];
-    return { row, side, level, px: row.children[1], bar: qcell.querySelector(".bar"), qtext: qcell.querySelector(".qtext") };
+    return { row, side, level, px: row.children[1], bar: qcell.querySelector(".depth"), qtext: qcell.querySelector(".qtext") };
   };
   for (let lv = N; lv >= 1; lv--) ladderRows.push(make("ask", lv));
   const sp = document.createElement("div"); sp.className = "row spreadrow";
@@ -448,11 +448,11 @@ function drawDay() {
     c.fillStyle = css("--ink-2"); c.textAlign = "right"; c.font = `500 12px ${css("--ui")}`;
     c.fillText("Fed statement, 2:00 pm", x - 6, g.padT + 10);
   }
-  // mid price: a flat card-stock band under the line, then the line in ink
+  // mid price: a flat light band under the line, then the line in ink
   c.beginPath();
   for (let i = 0; i < n; i++) { const x = xOf(snapT[i]), y = yOf(mid[i]); i ? c.lineTo(x, y) : c.moveTo(x, y); }
   c.lineTo(xOf(snapT[n - 1]), g.priceBottom); c.lineTo(xOf(snapT[0]), g.priceBottom); c.closePath();
-  c.fillStyle = "rgba(29,77,191,0.08)"; c.fill();
+  c.fillStyle = css("--shade"); c.fill();
   c.beginPath();
   for (let i = 0; i < n; i++) { const x = xOf(snapT[i]), y = yOf(mid[i]); i ? c.lineTo(x, y) : c.moveTo(x, y); }
   c.strokeStyle = css("--ink"); c.lineWidth = 1.4; c.lineJoin = "round"; c.stroke();
@@ -464,7 +464,7 @@ function drawCursor() {
   const c = ctxCur, g = geom;
   c.clearRect(0, 0, g.w, g.h);
   const x = Math.round(xOf(t)) + 0.5, i = snapAt(t), y = yOf(mid[i]);
-  c.fillStyle = "rgba(246,246,242,0.72)"; c.fillRect(x, g.padT, g.w - g.padR - x, g.volBottom - g.padT);  // the future, held back
+  c.fillStyle = "rgba(255,255,255,0.72)"; c.fillRect(x, g.padT, g.w - g.padR - x, g.volBottom - g.padT);  // the future, held back
   c.strokeStyle = css("--ink"); c.lineWidth = 2;
   c.beginPath(); c.moveTo(x, g.padT); c.lineTo(x, g.volBottom); c.stroke();
   c.fillStyle = css("--card"); c.strokeStyle = css("--ink"); c.lineWidth = 2;
