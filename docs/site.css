@@ -216,3 +216,4 @@ tr.cur td { background: var(--shade); }
   .bar { position: static; }
   .rail, #use-pick { display: none; }
 }
+code { font: 500 0.92em/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }

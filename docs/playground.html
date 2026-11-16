@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Market making on Apple's order book, with and without an order-flow filter · Adam Nguyen</title>
 <meta name="description" content="A playable working paper: a market maker quotes Apple on real Nasdaq order flow, with machine-learning quote filters chosen on a tuning hour and tested on an untouched afternoon.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Market making on Apple's order book, with and without an order-flow filter">
+<meta property="og:description" content="A playable working paper by Adam Nguyen: a C++ order book rebuilt from Nasdaq ITCH, and an ML quote filter tested out of sample (AUC 0.652 vs 0.603; loss cut from −$1,147 to −$470).">
+<meta property="og:url" content="https://orderbook-eosin.vercel.app/playground.html">
+<meta property="og:image" content="https://orderbook-eosin.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="author" content="Adam Nguyen">
+<link rel="canonical" href="https://orderbook-eosin.vercel.app/playground.html">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
@@ -94,6 +104,7 @@
   <nav aria-label="Site"><ul class="tabs">
     <li><a href="index.html">Replay</a></li>
     <li><a href="playground.html" aria-current="page">Playground</a></li>
+    <li><a href="#engine">Engine</a></li>
     <li><a href="#method">Method</a></li>
   </ul></nav>
   <div class="out" id="owner-links"><a href="https://github.com/adamdn-code/orderbook">GitHub</a><a href="https://linkedin.com/in/adam-nguyen-aaba70367">LinkedIn</a><a href="resume.pdf">Resume</a></div>
@@ -102,9 +113,9 @@
 <main class="page">
   <section class="titleblock" aria-labelledby="title">
     <h1 id="title">Market making on Apple's order book, with and without an order-flow filter</h1>
-    <p class="byline"><span>Adam Nguyen</span><span class="sep" aria-hidden="true">|</span><span>University of Washington, Mathematics and Informatics</span><span class="sep" aria-hidden="true">|</span><span>A playable working paper</span></p>
+    <p class="byline"><span>Adam Nguyen</span><span class="sep" aria-hidden="true">|</span><span>University of Washington, Mathematics and Informatics</span><span class="sep" aria-hidden="true">|</span><span>A playable working paper · <a href="paper.pdf">PDF version</a></span></p>
     <div class="abstract">
-      <p><span class="h">Abstract.</span>A market maker quotes Apple on a day of real Nasdaq order flow, rebuilt message by message from TotalView-ITCH with queue position tracked exactly. A gradient-boosted model of the next mid-price move reaches a test AUC of <b>0.652</b>, against 0.603 for the standard book-imbalance signal, and is used to pull quotes it expects to be run over. With every threshold and activity rate chosen on a tuning hour before the test afternoon is run, the filter cuts the afternoon's loss from <b>−$1,147 to −$470</b> at zero latency, and it loses less per share than imbalance at matched activity. With latency added, the best ML filter still cuts the loss by more than half at every setting up to 10 ms, and on a second, untouched day the fill-toxicity model holds up best. Every run below is real and precomputed; change the settings in Figure 1 to load any of them.</p>
+      <p><span class="h">Abstract.</span>A market maker quotes Apple on a day of real Nasdaq order flow, rebuilt message by message from TotalView-ITCH with queue position tracked exactly. A gradient-boosted model of the next mid-price move reaches a test AUC of <b>0.652</b>, against 0.603 for the standard book-imbalance signal, and is used to pull quotes it expects to be run over. With every threshold and activity rate chosen on a tuning hour before the test afternoon is run, the filter cuts the afternoon's loss from <b>−$1,147 to −$470</b> at zero latency, and it loses less per share than imbalance at matched activity. With latency added, the best ML filter still cuts the loss by more than half at every setting up to 10 ms, and on a second, untouched day the fill-toxicity model holds up best. Underneath is a C++ order book and lock-free matching engine (12.8M orders/s) that rebuilds Nasdaq's book from the raw feed with zero unmatched messages (§5). Every run below is real and precomputed; change the settings in Figure 1 to load any of them.</p>
     </div>
     <div class="keyfacts" aria-label="Headline numbers">
       <div><span class="k">Next-move AUC, test</span><span class="v">0.652</span></div>
@@ -226,8 +237,55 @@
     </div>
   </section>
 
-  <section class="section" id="method" aria-labelledby="s5">
-    <h2 id="s5"><span class="n">5</span>Method and limits</h2>
+  <section class="section" id="engine" aria-labelledby="s5">
+    <h2 id="s5"><span class="n">5</span>The engine underneath</h2>
+    <p class="lede">Every backtest above runs on a C++17 limit order book written for this project, standard library only. The same book rebuilds all 8,695 Nasdaq books for the replay. Tables 9 and 10 show how it got fast; Table 11 shows it is right.</p>
+    <div class="cols2">
+      <div class="stack">
+        <div>
+          <p class="caption top"><b>Table 9.</b> The book, one thread, 2M random orders (2-core cloud VM). The rewrite replaced a <code>std::map</code> of lists with a flat array of price levels, a bitmap of non-empty levels, an index-linked order pool and an open-addressing id map, so nothing allocates once warm.</p>
+          <div class="tbl"><table>
+            <thead><tr><th>Version</th><th>Orders/s</th><th>p50</th><th>p99</th><th>p99.9</th></tr></thead>
+            <tbody>
+              <tr><td><code>std::map</code> + <code>std::list</code></td><td>2.90M</td><td>153 ns</td><td>1,127 ns</td><td>3,202 ns</td></tr>
+              <tr><td>Flat levels + bitmap + pool</td><td class="num-strong">6.13M</td><td class="num-strong">110 ns</td><td class="num-strong">352 ns</td><td class="num-strong">593 ns</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+        <div>
+          <p class="caption top"><b>Table 10.</b> The matching engine: 8 client threads, 3 symbols, 2M orders (16-thread laptop). One matching thread per symbol and one lock-free single-producer, single-consumer ring per client per symbol, so no two threads ever write the same memory.</p>
+          <div class="tbl"><table>
+            <thead><tr><th>Version</th><th>Orders/s</th></tr></thead>
+            <tbody>
+              <tr><td>v1: mutex queue, condition variable, future per order</td><td>0.20M</td></tr>
+              <tr><td>v2: wake the matcher only when it sleeps</td><td>0.27M</td></tr>
+              <tr><td>v3: lock-free rings, no allocation per order</td><td>3.73M</td></tr>
+              <tr><td>v4: v3 with the new book</td><td class="num-strong">12.75M</td></tr>
+            </tbody>
+          </table></div>
+          <p class="note">Round trip from submit to result callback: p50 291 ns, p99 601 ns. Tests run under ThreadSanitizer and AddressSanitizer in CI.</p>
+        </div>
+      </div>
+      <div>
+        <p class="caption top"><b>Table 11.</b> Replaying Nasdaq's full feed for 30 January 2019 (368 million messages, 8,695 stocks) and checking the rebuilt books against what Nasdaq reports.</p>
+        <div class="tbl"><table>
+          <thead><tr><th>Check</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Executions, cancels and replaces naming an order the book lacked</td><td class="num-strong">0 of 198M</td></tr>
+            <tr><td>Executions or cancels larger than the order</td><td class="num-strong">0</td></tr>
+            <tr><td>Orders left resting at the close</td><td class="num-strong">0</td></tr>
+            <tr><td>Executions at the book's best price</td><td>99.31%</td></tr>
+            <tr><td>Executions hitting the order first in line</td><td>99.23%</td></tr>
+            <tr><td>Time for the whole day, one laptop core</td><td>560 s</td></tr>
+          </tbody>
+        </table></div>
+        <p class="note">Nasdaq did the matching, so its feed is a log of its own book changing: if the rebuilt book is right, every message names an order that is there, and executions hit the front of the queue. Scrub through Apple's rebuilt day on the <a href="index.html">replay</a>; code in <a href="https://github.com/adamdn-code/orderbook/tree/main/cpp">cpp/ on GitHub</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="method" aria-labelledby="s6">
+    <h2 id="s6"><span class="n">6</span>Method and limits</h2>
     <div class="cols2">
       <div class="prose">
         <p><b>Filters.</b> <i>Next move</i> predicts the direction of the next mid-price change. <i>Latency-trained</i> predicts the first change after a cancel could land, since nothing can dodge a move inside that gap. <i>Toxicity</i> predicts the 1-second markout of a fill on each side, trained on the fills the plain market maker got in the morning. <i>Imbalance</i> is the baseline: how hard the best bid and ask lean one way.</p>
@@ -590,13 +648,13 @@ function extraPanels() {
   const x = D.extra || {}, m = D.model;
   const d2 = x.second_day;
   if (d2) {
-    $("d2-title").innerHTML = `<b>Table 3.</b> A second day, ${longDate("2019-12-30")}, with every model, threshold and rate frozen from day 1. Top: AUC. Bottom: PnL for the whole day, each filter at its better action; bold is the least loss at each latency.`;
+    $("d2-title").innerHTML = `<b>Table 3.</b> A second day, ${longDate("2019-12-30")}, with every model, threshold and rate frozen from day 1. Top: AUC. Bottom: PnL for the whole day, each filter pulling quotes at its day-1 rate; bold is the least loss at each latency.`;
     const labs = { next_move: "Next move", next_move_100us: "After 100 µs", next_move_1ms: "After 1 ms", next_move_10ms: "After 10 ms" };
     let html = table(["Label", "Imbalance", "Day-1 model", "Gain, 95% CI"],
       Object.entries(d2.auc).map(([k, v]) => [labs[k] || k, f3(v.auc.imbalance), `<span class="num-strong">${f3(v.auc.model)}</span>`, gainCi(v.auc.model - v.auc.imbalance, v.ci95.model_minus_imbalance)]));
     const lats = [...new Set(d2.backtest.map((r) => r.latency_us))].sort((a, b) => a - b);
     const order = ["none", "imbalance", "model", "model_lat", "toxicity"];
-    const best = (l, f) => d2.backtest.filter((r) => r.latency_us === l && r.filter === f).sort((a, b) => b.pnl_with_rebate - a.pnl_with_rebate)[0];
+    const best = (l, f) => d2.backtest.find((r) => r.latency_us === l && r.filter === f && (f === "none" || r.action === "pull"));
     const head = ["Latency", ...order.map((f) => F[f].short)];
     const rows = lats.map((l) => {
       const vals = order.map((f) => best(l, f));

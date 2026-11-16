@@ -122,7 +122,7 @@ python backtest/ml_generalize.py day2 ~/itch/d2/AAPL_events.csv                 
 make -C cpp ml && python backtest/export_model.py && python backtest/export_model.py --check ~/itch/AAPL_events.csv
 python backtest/model_size_tradeoff.py ~/itch/AAPL_events.csv                        # accuracy vs nanoseconds
 ```
-Also needs `scikit-learn`. `ml_backtest.py` writes `docs/playground_data.json` for the **[interactive playground](https://adamdn-code.github.io/orderbook/playground.html)**. Other stocks' event files come from `itch_replay FILE --symbols SYM --track SYM --events`. The second day is Nasdaq's public sample file for 2019-12-30.
+Also needs `scikit-learn`. `ml_backtest.py` writes `docs/playground_data.json` for the **[interactive playground](https://orderbook-eosin.vercel.app/playground.html)**. Other stocks' event files come from `itch_replay FILE --symbols SYM --track SYM --events`. The second day is Nasdaq's public sample file for 2019-12-30.
 
 ### Setup
 - *Samples:* one per timestamp after all its events are applied (1.44M for AAPL), so features never see half of a sweep.

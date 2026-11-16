@@ -27,7 +27,7 @@ Replaying Nasdaq's complete feed for Wednesday, January 30, 2019 ([full output](
 
 Every order the feed referred to was where the book said it would be, and the book emptied exactly at the close.
 
-**Interactive replay:** [adamdn-code.github.io/orderbook](https://adamdn-code.github.io/orderbook/). Scrub through Apple's day with a 10-level depth ladder and trade tape. It's built by `make_viewer.py` from `itch_replay --track AAPL --depth 10` output into one self-contained page (`docs/index.html`).
+**Interactive replay:** [orderbook-eosin.vercel.app](https://orderbook-eosin.vercel.app/). Scrub through Apple's day with a 10-level depth ladder and trade tape. It's built by `make_viewer.py` from `itch_replay --track AAPL --depth 10` output into one self-contained page (`docs/index.html`).
 
 **Apple's day, rebuilt from the raw feed**
 
@@ -39,7 +39,7 @@ The opening and closing crosses are the two volume spikes at 9:30 and 4:00 (blac
 - **Stub quotes.** A stock whose first order of the day is a stub quote above $1 but which trades under $1 (HMNY, MoviePass, about 1¢ that day) used to land in the cents book with its sub-penny orders in the side table. It is now rebuilt as a tick book on its first sub-penny order, which raised first-in-line from 98.68% to 99.23%. What's left in the side table is mostly orders priced far from the market and the 131 crossing adds.
 - **The remaining ~0.8% of executions not first in line** include executions of side-table orders, which the check can't place in a queue, plus cases where Nasdaq's priority differs from plain price-time (for example, displayed orders trading ahead of reserve size).
 
-**Interactive replay:** [adamdn-code.github.io/orderbook](https://adamdn-code.github.io/orderbook/). Scrub through Apple's day with a 10-level depth ladder and trade tape. It's built by `make_viewer.py` from `itch_replay --track AAPL --depth 10` output into one self-contained page (`docs/index.html`).
+**Interactive replay:** [orderbook-eosin.vercel.app](https://orderbook-eosin.vercel.app/). Scrub through Apple's day with a 10-level depth ladder and trade tape. It's built by `make_viewer.py` from `itch_replay --track AAPL --depth 10` output into one self-contained page (`docs/index.html`).
 
 **Apple's day, rebuilt from the raw feed**
 

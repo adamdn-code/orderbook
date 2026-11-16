@@ -5,3 +5,7 @@ backtest/results/quick/
 backtest/results/ml/signal.npz
 backtest/results/ml/models.pkl
 backtest/results/ml/selection.pkl
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/paper.pdf
