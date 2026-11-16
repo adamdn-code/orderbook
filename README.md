@@ -19,6 +19,13 @@ A C++ limit order book and lock-free matching engine, used to rebuild every stoc
 | Market maker, same afternoon, 0 latency | loss **−$1,147 → −$470** with the filter (rates picked before testing) |
 | Inference in C++ next to the book | 50-tree model, **405 ns** per prediction, bit-identical to Python |
 
+**Run it yourself** (about a minute, no data download):
+```bash
+pip install -r requirements.txt   # numpy, pandas, scikit-learn, matplotlib
+make demo                         # needs g++, zlib1g-dev and python3-dev
+```
+It builds and tests the C++, replays a synthetic 2M-message ITCH feed on one and two threads, checks the WebAssembly build against the native one (if clang, lld and node are installed), and runs features → model → market maker on a synthetic day. The real study needs Nasdaq's 5 GB sample file; see `cpp/itch/README.md`.
+
 **Where things are:** `cpp/` the C++ book and engine · `cpp/itch/` the ITCH parser and replay · `backtest/` the market maker, ML models and evaluation · `orderbook.py`, `engine.py` the original Python book · `docs/` the site.
 
 ## The C++ book and engine

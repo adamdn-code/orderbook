@@ -1,10 +1,10 @@
 // Checks docs/orderbook.wasm: matching, queue order, cancels, errors that leave the book unchanged,
 // and the same trades as the native build on a random million-order run.
-// usage: node cpp/wasm/test.mjs EXPECTED_TRADES
+// usage: node cpp/wasm/test.mjs EXPECTED_TRADES   (WASM_OUT=path to test another build)
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-const bytes = fs.readFileSync(new URL("../../docs/orderbook.wasm", import.meta.url));
+const bytes = fs.readFileSync(process.env.WASM_OUT || new URL("../../docs/orderbook.wasm", import.meta.url));
 let mem;
 const dec = new TextDecoder();
 const { instance } = await WebAssembly.instantiate(bytes, { env: { ob_fail: (p) => {

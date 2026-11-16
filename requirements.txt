@@ -1,0 +1,5 @@
+# Python side of the project: backtests, ML study and figures (the C++ needs only a compiler and zlib)
+numpy
+pandas
+scikit-learn
+matplotlib

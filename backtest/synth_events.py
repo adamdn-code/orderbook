@@ -25,7 +25,7 @@ COLS = ["ts_ns", "type", "ref", "side", "shares", "price", "new_ref"]
 
 
 def generate(minutes: float = 30, seed: int = 0, start_ns: int = QUOTE_START - 60 * NS,
-             start_cents: int = 15_000) -> pd.DataFrame:
+             start_cents: int = 15_000, gap_ms: float = 15.0) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     book = obfast.Book()
     rows: list[tuple] = []
@@ -49,7 +49,7 @@ def generate(minutes: float = 30, seed: int = 0, start_ns: int = QUOTE_START - 6
         add(SELL, 100 * int(rng.integers(1, 6)), start_cents + k)
 
     while ts < end:
-        ts += int(rng.exponential(15_000_000))  # ~70 events/s, about AAPL's rate
+        ts += int(rng.exponential(gap_ms * 1_000_000))  # 15 ms: ~70 events/s, about AAPL's rate
         fundamental += rng.normal(0, 0.03)
         bb, ba = book.best_bid(), book.best_ask()
         if bb is None or ba is None:

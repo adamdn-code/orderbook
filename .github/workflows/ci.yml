@@ -49,6 +49,18 @@ jobs:
         working-directory: cpp
         run: make wasm-test
 
+  demo:
+    name: make demo (fresh clone, one command)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -q && sudo apt-get install -y zlib1g-dev
+      - run: pip install -r requirements.txt
+      - run: make demo
+
   python:
     name: Python tests
     runs-on: ubuntu-latest
