@@ -95,7 +95,7 @@
     <li><a href="playground.html" aria-current="page">Playground</a></li>
     <li><a href="#method">Method</a></li>
   </ul></nav>
-  <div class="out" id="owner-links"><a href="https://github.com/adamdn-code/orderbook">GitHub</a></div>
+  <div class="out" id="owner-links"><a href="https://github.com/adamdn-code/orderbook">GitHub</a><a href="https://linkedin.com/in/adam-nguyen-aaba70367">LinkedIn</a><a href="resume.pdf">Resume</a></div>
 </header>
 
 <main class="page">
@@ -232,8 +232,8 @@
 
 <script>
 "use strict";
-// Owner links. LinkedIn and resume show up here once they are filled in.
-const OWNER = { github: "https://github.com/adamdn-code", linkedin: "", resume: "" };
+// Owner links, shown in the top bar and footer.
+const OWNER = { github: "https://github.com/adamdn-code", linkedin: "https://linkedin.com/in/adam-nguyen-aaba70367", resume: "resume.pdf" };
 
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();

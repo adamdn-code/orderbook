@@ -7,7 +7,7 @@ related_targets: ["docs/index.html"]
 
 # Surface: order book site (replay + strategy playground)
 
-Mode: operate. Audience: recruiters/interviewers and technical peers, equally; both explore hands-on. Task: scrub the AAPL 2019-01-30 replay; set filter, activity rate, latency, action and placement in the playground and read the result, the honest scorecard, and the model and generalisation evidence. Constraints: static pages in docs/; numbers only from generated data; owner identity (name, GitHub; LinkedIn and resume links pending). Unresolved: LinkedIn and resume URLs.
+Mode: operate. Audience: recruiters/interviewers and technical peers, equally; both explore hands-on. Task: scrub the AAPL 2019-01-30 replay; set filter, activity rate, latency, action and placement in the playground and read the result, the honest scorecard, and the model and generalisation evidence. Constraints: static pages in docs/; numbers only from generated data; owner identity (name, GitHub, LinkedIn, resume).
 
 ## Direction contract
 

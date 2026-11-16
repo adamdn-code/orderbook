@@ -39,7 +39,7 @@ Real exchange data, end to end, with honest evaluation: the book is rebuilt from
 
 ## Brand Commitments
 
-- The work is presented as Adam Nguyen's (confirmed): name, GitHub (github.com/adamdn-code), LinkedIn and resume. LinkedIn and resume URLs: **not yet provided**; never invent them.
+- The work is presented as Adam Nguyen's (confirmed): name, GitHub (github.com/adamdn-code), LinkedIn (linkedin.com/in/adam-nguyen-aaba70367) and resume (`docs/resume.pdf`, compiled from the "adam resume" Overleaf project; re-export it there when the resume changes). The resume is public by the owner's choice.
 - No Claude or AI attribution on the site or in commits.
 
 ## Evidence on Hand
